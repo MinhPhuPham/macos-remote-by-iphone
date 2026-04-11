@@ -5,10 +5,6 @@ struct TrustedDevice: Identifiable, Codable, Hashable {
     let id: String          // device UUID
     let name: String        // device display name
     let dateAdded: Date
-
-    var displayLabel: String {
-        "\(name) (added \(dateAdded.formatted(date: .abbreviated, time: .omitted)))"
-    }
 }
 
 /// Persists the list of trusted device UUIDs so they skip the confirmation dialog.
@@ -24,12 +20,10 @@ final class TrustedDeviceStore: ObservableObject {
 
     // MARK: - Public API
 
-    /// Check whether a device UUID is trusted.
     func isTrusted(_ deviceUUID: String) -> Bool {
         devices.contains { $0.id == deviceUUID }
     }
 
-    /// Add a device to the trusted list.
     func trust(deviceUUID: String, deviceName: String) {
         guard !isTrusted(deviceUUID) else { return }
         let device = TrustedDevice(id: deviceUUID, name: deviceName, dateAdded: Date())
@@ -37,13 +31,11 @@ final class TrustedDeviceStore: ObservableObject {
         save()
     }
 
-    /// Revoke trust for a device.
     func revoke(deviceUUID: String) {
         devices.removeAll { $0.id == deviceUUID }
         save()
     }
 
-    /// Revoke all trusted devices.
     func revokeAll() {
         devices.removeAll()
         save()

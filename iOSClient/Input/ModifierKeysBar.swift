@@ -1,13 +1,13 @@
 import SwiftUI
 
 /// Active modifier key flags matching CGEventFlags raw values.
-struct ModifierKeys: OptionSet {
+struct ModifierKeys: OptionSet, Sendable {
     let rawValue: UInt64
 
-    static let command  = ModifierKeys(rawValue: 1 << 20) // CGEventFlags.maskCommand
-    static let option   = ModifierKeys(rawValue: 1 << 19) // CGEventFlags.maskAlternate
-    static let control  = ModifierKeys(rawValue: 1 << 18) // CGEventFlags.maskControl
-    static let shift    = ModifierKeys(rawValue: 1 << 17) // CGEventFlags.maskShift
+    static let command  = ModifierKeys(rawValue: 1 << 20)
+    static let option   = ModifierKeys(rawValue: 1 << 19)
+    static let control  = ModifierKeys(rawValue: 1 << 18)
+    static let shift    = ModifierKeys(rawValue: 1 << 17)
 }
 
 /// A bar of toggle buttons for Cmd, Opt, Ctrl, Shift modifier keys.
@@ -49,7 +49,7 @@ struct ModifierKeysBar: View {
         } label: {
             Text(label)
                 .font(.title2)
-                .frame(width: 44, height: 36)
+                .frame(width: 44, height: 44) // 44pt minimum tap target per HIG
                 .background(isActive ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 8))
                 .foregroundStyle(isActive ? .white : .primary)
         }

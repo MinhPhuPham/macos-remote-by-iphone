@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var showPassword = false
     @State private var currentPIN: String = ""
     @State private var selectedTab = "general"
+    @State private var errorMessage: String?
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -115,8 +116,12 @@ struct SettingsView: View {
                 }
 
                 Button("Generate New PIN") {
-                    if let pin = try? server.authManager.generatePIN() {
+                    do {
+                        let pin = try server.authManager.generatePIN()
                         currentPIN = pin
+                        errorMessage = nil
+                    } catch {
+                        errorMessage = error.localizedDescription
                     }
                 }
             }
@@ -126,11 +131,23 @@ struct SettingsView: View {
 
                 Button("Set Password") {
                     guard passwordInput.count >= 8 else { return }
-                    try? server.authManager.setPassword(passwordInput)
-                    currentPIN = passwordInput
-                    passwordInput = ""
+                    do {
+                        try server.authManager.setPassword(passwordInput)
+                        currentPIN = passwordInput
+                        passwordInput = ""
+                        errorMessage = nil
+                    } catch {
+                        errorMessage = error.localizedDescription
+                    }
                 }
                 .disabled(passwordInput.count < 8)
+            }
+
+            if let errorMessage {
+                Section {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                }
             }
         }
         .formStyle(.grouped)

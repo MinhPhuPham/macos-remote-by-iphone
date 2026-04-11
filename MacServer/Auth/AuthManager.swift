@@ -1,11 +1,7 @@
 import Foundation
+import os
 
-/// Authorization level chosen by the user in the confirmation dialog.
-enum AuthorizationLevel {
-    case deny
-    case allowOnce
-    case alwaysAllow
-}
+private let logger = Logger(subsystem: "com.myremote.server", category: "AuthManager")
 
 /// Manages server-side authentication: password validation, brute-force protection,
 /// session tokens, and the user confirmation flow.
@@ -17,7 +13,9 @@ final class AuthManager: ObservableObject {
     private let trustedDeviceStore: TrustedDeviceStore
 
     /// Tracks failed attempts per IP for brute-force protection.
+    /// Protected by `lock` for thread safety — accessed from network callbacks.
     private var failedAttempts: [String: (count: Int, lastAttempt: Date)] = [:]
+    private let lock = NSLock()
 
     init(trustedDeviceStore: TrustedDeviceStore) {
         self.trustedDeviceStore = trustedDeviceStore
@@ -31,6 +29,7 @@ final class AuthManager: ObservableObject {
     }
 
     /// Generate a random 6-digit PIN and store it as the password.
+    @discardableResult
     func generatePIN() throws -> String {
         let pin = KeychainHelper.generatePIN()
         try KeychainHelper.storePassword(pin)
@@ -46,13 +45,14 @@ final class AuthManager: ObservableObject {
 
     /// Check if an IP address is currently blocked.
     func isBlocked(ip: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
         guard let record = failedAttempts[ip] else { return false }
         if record.count >= MyRemoteConstants.maxFailedAuthAttempts {
             let elapsed = Date().timeIntervalSince(record.lastAttempt)
             if elapsed < MyRemoteConstants.authBlockDuration {
                 return true
             } else {
-                // Block expired, reset.
                 failedAttempts.removeValue(forKey: ip)
                 return false
             }
@@ -62,6 +62,8 @@ final class AuthManager: ObservableObject {
 
     /// Record a failed authentication attempt from an IP.
     func recordFailedAttempt(ip: String) {
+        lock.lock()
+        defer { lock.unlock() }
         var record = failedAttempts[ip] ?? (count: 0, lastAttempt: Date())
         record.count += 1
         record.lastAttempt = Date()
@@ -70,6 +72,8 @@ final class AuthManager: ObservableObject {
 
     /// Clear failed attempts for an IP (e.g., on successful auth).
     func clearFailedAttempts(ip: String) {
+        lock.lock()
+        defer { lock.unlock() }
         failedAttempts.removeValue(forKey: ip)
     }
 
@@ -84,8 +88,11 @@ final class AuthManager: ObservableObject {
     // MARK: - Session Management
 
     /// Create a new session after successful auth.
-    func createSession(deviceName: String) -> String {
-        let token = KeychainHelper.generateSessionToken()
+    func createSession(deviceName: String) -> String? {
+        guard let token = try? KeychainHelper.generateSessionToken() else {
+            logger.error("Failed to generate session token")
+            return nil
+        }
         currentSessionToken = token
         connectedDeviceName = deviceName
         return token

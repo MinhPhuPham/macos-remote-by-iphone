@@ -11,7 +11,9 @@ final class KeychainHelper {
 
     /// Store or update the server password in the Keychain.
     static func storePassword(_ password: String) throws {
-        guard let data = password.data(using: .utf8) else { return }
+        guard let data = password.data(using: .utf8) else {
+            throw KeychainError.encodingFailed
+        }
 
         let query: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
@@ -71,9 +73,12 @@ final class KeychainHelper {
     // MARK: - Session Token
 
     /// Generate a cryptographically random session token (256-bit).
-    static func generateSessionToken() -> String {
+    static func generateSessionToken() throws -> String {
         var bytes = [UInt8](repeating: 0, count: MyRemoteConstants.sessionTokenLength)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        guard status == errSecSuccess else {
+            throw KeychainError.randomGenerationFailed(status: status)
+        }
         return Data(bytes).base64EncodedString()
     }
 }
@@ -82,11 +87,17 @@ final class KeychainHelper {
 
 enum KeychainError: Error, LocalizedError {
     case unhandledError(status: OSStatus)
+    case encodingFailed
+    case randomGenerationFailed(status: OSStatus)
 
     var errorDescription: String? {
         switch self {
         case .unhandledError(let status):
             return "Keychain error: \(status)"
+        case .encodingFailed:
+            return "Failed to encode password as UTF-8"
+        case .randomGenerationFailed(let status):
+            return "Secure random generation failed: \(status)"
         }
     }
 }

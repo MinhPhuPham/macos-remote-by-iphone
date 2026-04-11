@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// Type-safe navigation routes.
+enum Route: Hashable {
+    case password
+    case session
+}
+
 /// Root view: NavigationStack driving the server discovery → auth → remote session flow.
 struct ContentView: View {
 
@@ -14,31 +20,28 @@ struct ContentView: View {
         NavigationStack(path: $navigationPath) {
             ServerListView(browser: browser) { server in
                 selectedServer = server
-                navigationPath.append("password")
+                navigationPath.append(Route.password)
             }
-            .navigationDestination(for: String.self) { destination in
-                switch destination {
-                case "password":
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .password:
                     passwordScreen
-                case "session":
+                case .session:
                     RemoteSessionView(connection: connection)
                         .navigationBarBackButtonHidden()
-                default:
-                    EmptyView()
                 }
             }
         }
         .onChange(of: connection.state) { _, newState in
             switch newState {
             case .authenticating:
-                // Connection is ready — send the pending auth request.
                 if let password = pendingPassword {
                     connection.sendAuthRequest(password: password)
                     pendingPassword = nil
                 }
             case .connected:
                 navigationPath = NavigationPath()
-                navigationPath.append("session")
+                navigationPath.append(Route.session)
             case .disconnected:
                 if !navigationPath.isEmpty {
                     navigationPath = NavigationPath()
@@ -58,7 +61,7 @@ struct ContentView: View {
             case .waitingForApproval:
                 waitingForApprovalView(serverName: server.name)
             case .error(let message):
-                errorView(message: message, server: server)
+                errorView(message: message)
             default:
                 PasswordEntryView(serverName: server.name) { password in
                     pendingPassword = password
@@ -82,7 +85,7 @@ struct ContentView: View {
         .navigationTitle("Connecting")
     }
 
-    private func errorView(message: String, server: DiscoveredServer) -> some View {
+    private func errorView(message: String) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 48))
@@ -94,7 +97,6 @@ struct ContentView: View {
 
             Button("Try Again") {
                 connection.disconnect()
-                // Stay on password screen for retry.
             }
             .buttonStyle(.borderedProminent)
         }

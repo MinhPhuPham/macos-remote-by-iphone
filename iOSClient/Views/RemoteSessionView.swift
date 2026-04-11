@@ -1,5 +1,8 @@
 import SwiftUI
 import CoreMedia
+import os
+
+private let logger = Logger(subsystem: "com.myremote.client", category: "RemoteSession")
 
 // MARK: - Session Pipeline Coordinator
 
@@ -7,9 +10,10 @@ import CoreMedia
 /// Using `@StateObject` ensures stable identity across SwiftUI view updates.
 final class SessionPipeline: ObservableObject {
 
-    let displayView = VideoDisplayUIView()
+    var displayView: VideoDisplayUIView?
     let videoDecoder = VideoDecoder()
     let gestureHandler = GestureHandler()
+    let sampleBufferFactory = SampleBufferFactory()
 
     @Published private(set) var fps: Int = 0
     private var frameCount: Int = 0
@@ -20,9 +24,13 @@ final class SessionPipeline: ObservableObject {
         let now = Date()
         let elapsed = now.timeIntervalSince(lastFPSUpdate)
         if elapsed >= 1.0 {
-            fps = frameCount
+            let newFPS = frameCount
             frameCount = 0
             lastFPSUpdate = now
+            // Only publish when value changes to avoid unnecessary SwiftUI diffs.
+            if newFPS != fps {
+                fps = newFPS
+            }
         }
     }
 
@@ -54,7 +62,7 @@ struct RemoteSessionView: View {
             overlayControls
         }
         .onAppear { startVideoReceiver() }
-        .onDisappear { pipeline.reset(); connection.onFrameReceived = nil }
+        .onDisappear { cleanup() }
         .statusBarHidden()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Remote desktop session")
@@ -63,9 +71,11 @@ struct RemoteSessionView: View {
     // MARK: - Subviews
 
     private var videoLayer: some View {
-        VideoDisplayView(displayView: pipeline.displayView)
-            .ignoresSafeArea()
-            .onAppear { setupGestures() }
+        VideoDisplayView { createdView in
+            pipeline.displayView = createdView
+            setupGestures(on: createdView)
+        }
+        .ignoresSafeArea()
     }
 
     private var overlayControls: some View {
@@ -101,30 +111,32 @@ struct RemoteSessionView: View {
     // MARK: - Video Pipeline
 
     private func startVideoReceiver() {
-        pipeline.videoDecoder.onDecodedFrame = { pixelBuffer, timestamp in
-            if let sampleBuffer = CMSampleBuffer.create(from: pixelBuffer, presentationTime: timestamp) {
-                DispatchQueue.main.async {
-                    self.pipeline.displayView.enqueue(sampleBuffer)
-                    self.pipeline.updateFPS()
+        pipeline.videoDecoder.onDecodedFrame = { [weak pipeline] pixelBuffer, timestamp in
+            guard let pipeline = pipeline else { return }
+            if let sampleBuffer = pipeline.sampleBufferFactory.create(from: pixelBuffer, presentationTime: timestamp) {
+                DispatchQueue.main.async { [weak pipeline] in
+                    pipeline?.displayView?.enqueue(sampleBuffer)
+                    pipeline?.updateFPS()
                 }
             }
         }
 
-        connection.onFrameReceived = { frame in
+        connection.onFrameReceived = { [weak pipeline] frame in
+            guard let pipeline = pipeline else { return }
             switch frame.type {
             case .videoConfig:
-                handleVideoConfig(frame)
+                handleVideoConfig(frame, pipeline: pipeline)
             case .videoFrame:
                 pipeline.videoDecoder.decode(nalData: frame.payload)
             case .configUpdate:
-                handleConfigUpdate(frame)
+                handleConfigUpdate(frame, pipeline: pipeline)
             default:
                 break
             }
         }
     }
 
-    private func handleVideoConfig(_ frame: ProtocolFrame) {
+    private func handleVideoConfig(_ frame: ProtocolFrame, pipeline: SessionPipeline) {
         let data = frame.payload
         guard data.count > 4 else { return }
         let spsLength = Int(data[0..<4].withUnsafeBytes { $0.load(as: UInt32.self).bigEndian })
@@ -133,31 +145,38 @@ struct RemoteSessionView: View {
         let sps = data.subdata(in: 4..<(4 + spsLength))
         let pps = data.subdata(in: (4 + spsLength)..<data.count)
 
-        try? pipeline.videoDecoder.configure(sps: sps, pps: pps)
+        do {
+            try pipeline.videoDecoder.configure(sps: sps, pps: pps)
+        } catch {
+            logger.error("Failed to configure video decoder: \(error.localizedDescription)")
+        }
     }
 
-    private func handleConfigUpdate(_ frame: ProtocolFrame) {
+    private func handleConfigUpdate(_ frame: ProtocolFrame, pipeline: SessionPipeline) {
         guard let config = try? MessageCodec.decodePayload(ConfigUpdate.self, from: frame) else { return }
-        pipeline.gestureHandler.serverScreenWidth = CGFloat(config.screenWidth)
-        pipeline.gestureHandler.serverScreenHeight = CGFloat(config.screenHeight)
+        // Dispatch to main thread — gestureHandler properties are read from main.
+        DispatchQueue.main.async { [weak pipeline] in
+            pipeline?.gestureHandler.serverScreenWidth = CGFloat(config.screenWidth)
+            pipeline?.gestureHandler.serverScreenHeight = CGFloat(config.screenHeight)
+        }
     }
 
     // MARK: - Gestures
 
-    private func setupGestures() {
-        pipeline.gestureHandler.onMouseEvent = { type, point in
-            guard let token = connection.sessionToken else { return }
+    private func setupGestures(on view: VideoDisplayUIView) {
+        pipeline.gestureHandler.onMouseEvent = { [weak connection] type, point in
+            guard let token = connection?.sessionToken else { return }
             let event = MouseEvent(sessionToken: token, type: type, x: Double(point.x), y: Double(point.y))
-            connection.sendJSON(.mouseEvent, payload: event)
+            connection?.sendJSON(.mouseEvent, payload: event)
         }
 
-        pipeline.gestureHandler.onScrollEvent = { deltaX, deltaY in
-            guard let token = connection.sessionToken else { return }
+        pipeline.gestureHandler.onScrollEvent = { [weak connection] deltaX, deltaY in
+            guard let token = connection?.sessionToken else { return }
             let event = ScrollEvent(sessionToken: token, deltaX: Double(deltaX), deltaY: Double(deltaY))
-            connection.sendJSON(.scrollEvent, payload: event)
+            connection?.sendJSON(.scrollEvent, payload: event)
         }
 
-        pipeline.gestureHandler.attach(to: pipeline.displayView)
+        pipeline.gestureHandler.attach(to: view)
     }
 
     // MARK: - Keyboard
@@ -166,7 +185,7 @@ struct RemoteSessionView: View {
         guard let token = connection.sessionToken else { return }
 
         var modifiers = activeModifiers.rawValue
-        if character.count == 1, KeyCodeMap.requiresShift(character.first!) {
+        if character.count == 1, let first = character.first, KeyCodeMap.requiresShift(first) {
             modifiers |= ModifierKeys.shift.rawValue
         }
 
@@ -176,7 +195,11 @@ struct RemoteSessionView: View {
         let upEvent = KeyEvent(sessionToken: token, keyCode: keyCode, isDown: false, modifiers: modifiers)
         connection.sendJSON(.keyEvent, payload: upEvent)
 
-        // Auto-deactivate modifiers after keypress (sticky behavior).
         activeModifiers = ModifierKeys()
+    }
+
+    private func cleanup() {
+        pipeline.reset()
+        connection.onFrameReceived = nil
     }
 }

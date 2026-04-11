@@ -2,8 +2,8 @@ import Foundation
 
 /// Shared constants for MyRemote protocol and networking.
 public enum MyRemoteConstants {
-    /// Default TCP port for the server.
-    public static let defaultPort: UInt16 = 5900
+    /// Default TCP port for the server (5910 to avoid VNC/5900 conflict).
+    public static let defaultPort: UInt16 = 5910
 
     /// Bonjour service type.
     public static let bonjourServiceType = "_myremote._tcp"

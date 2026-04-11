@@ -2,7 +2,6 @@ import Foundation
 import CoreGraphics
 
 /// Injects mouse events into macOS via CGEvent.
-/// Translates protocol MouseEvent messages into native cursor actions.
 final class MouseInjector {
 
     /// Check if Accessibility permission is granted (required for CGEvent injection).
@@ -12,13 +11,12 @@ final class MouseInjector {
 
     /// Prompt the user to grant Accessibility permission.
     static func requestAccessibilityPermission() {
-        let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
     }
 
     // MARK: - Event Injection
 
-    /// Inject a mouse event at the given screen coordinates.
     func inject(event: MouseEvent) {
         let point = CGPoint(x: event.x, y: event.y)
 
@@ -53,15 +51,12 @@ final class MouseInjector {
         cgEvent.post(tap: .cghidEventTap)
     }
 
-    /// Inject a left-click (down + up) at a point.
     func click(at point: CGPoint) {
         injectRaw(type: .leftMouseDown, point: point, button: .left)
         injectRaw(type: .leftMouseUp, point: point, button: .left)
     }
 
-    /// Inject a double-click at a point.
     func doubleClick(at point: CGPoint) {
-        // First click.
         if let down1 = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown,
                                 mouseCursorPosition: point, mouseButton: .left) {
             down1.setIntegerValueField(.mouseEventClickState, value: 1)
@@ -72,7 +67,6 @@ final class MouseInjector {
             up1.setIntegerValueField(.mouseEventClickState, value: 1)
             up1.post(tap: .cghidEventTap)
         }
-        // Second click.
         if let down2 = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown,
                                 mouseCursorPosition: point, mouseButton: .left) {
             down2.setIntegerValueField(.mouseEventClickState, value: 2)
@@ -85,13 +79,11 @@ final class MouseInjector {
         }
     }
 
-    /// Inject a right-click at a point.
     func rightClick(at point: CGPoint) {
         injectRaw(type: .rightMouseDown, point: point, button: .right)
         injectRaw(type: .rightMouseUp, point: point, button: .right)
     }
 
-    /// Inject a scroll event.
     func scroll(deltaX: Int32, deltaY: Int32) {
         guard let event = CGEvent(scrollWheelEvent2Source: nil,
                                    units: .pixel,
@@ -102,17 +94,13 @@ final class MouseInjector {
         event.post(tap: .cghidEventTap)
     }
 
-    /// Move the cursor without clicking.
     func moveCursor(to point: CGPoint) {
         injectRaw(type: .mouseMoved, point: point, button: .left)
     }
 
-    /// Inject a mouse-drag event (while button is held).
     func drag(to point: CGPoint) {
         injectRaw(type: .leftMouseDragged, point: point, button: .left)
     }
-
-    // MARK: - Internal
 
     private func injectRaw(type: CGEventType, point: CGPoint, button: CGMouseButton) {
         guard let event = CGEvent(mouseEventSource: nil, mouseType: type,

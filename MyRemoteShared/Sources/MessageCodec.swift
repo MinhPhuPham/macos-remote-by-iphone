@@ -7,13 +7,17 @@ public final class MessageCodec: @unchecked Sendable {
     private var buffer = Data()
     private let lock = NSLock()
 
+    // Cached coders — thread-safe for encode/decode operations.
+    private static let encoder = JSONEncoder()
+    private static let decoder = JSONDecoder()
+
     public init() {}
 
     // MARK: - Encoding
 
-    /// Encode a `Codable` payload into a `ProtocolFrame`.
+    /// Encode a `Codable` payload into a wire-format frame.
     public static func encode<T: Encodable>(_ type: MessageType, payload: T) throws -> Data {
-        let json = try JSONEncoder().encode(payload)
+        let json = try encoder.encode(payload)
         let frame = ProtocolFrame(type: type, payload: json)
         return frame.encode()
     }
@@ -41,15 +45,32 @@ public final class MessageCodec: @unchecked Sendable {
 
     /// Try to extract all complete frames from the buffer.
     /// Returns decoded frames; partial data remains in the buffer.
+    /// Unknown message types are silently skipped (bytes consumed but no frame emitted).
     public func decodeAvailableFrames() -> [ProtocolFrame] {
         lock.lock()
         defer { lock.unlock() }
 
         var frames: [ProtocolFrame] = []
-        while let (frame, consumed) = ProtocolFrame.decode(from: buffer) {
-            frames.append(frame)
-            buffer.removeFirst(consumed)
+        var offset = 0
+        let bufferSlice = buffer
+
+        while offset < bufferSlice.count {
+            let remaining = bufferSlice[bufferSlice.startIndex + offset...]
+            guard let (frame, consumed) = ProtocolFrame.decode(from: remaining) else {
+                break // Not enough data for a complete frame.
+            }
+            if let frame = frame {
+                frames.append(frame)
+            }
+            // Always advance — even for unknown types — to prevent infinite loops.
+            offset += consumed
         }
+
+        // Compact the buffer once after processing all frames (O(n) once, not per frame).
+        if offset > 0 {
+            buffer.removeFirst(offset)
+        }
+
         return frames
     }
 
@@ -64,6 +85,6 @@ public final class MessageCodec: @unchecked Sendable {
 
     /// Decode a JSON payload from a frame.
     public static func decodePayload<T: Decodable>(_ type: T.Type, from frame: ProtocolFrame) throws -> T {
-        return try JSONDecoder().decode(type, from: frame.payload)
+        return try decoder.decode(type, from: frame.payload)
     }
 }

@@ -1,6 +1,9 @@
 import Foundation
 import AppKit
 import Network
+import os
+
+private let logger = Logger(subsystem: "com.myremote.server", category: "ServerManager")
 
 /// Central coordinator for the macOS server.
 /// Manages networking, auth flow, client connections, and streaming state.
@@ -26,7 +29,6 @@ final class ServerManager: ObservableObject {
         }
     }
 
-    /// Icon name for the menu bar.
     var statusIcon: String {
         if connectedClient != nil { return "circle.fill" }
         if isRunning { return "circle.dotted" }
@@ -38,8 +40,9 @@ final class ServerManager: ObservableObject {
     let authManager: AuthManager
     let trustedDeviceStore: TrustedDeviceStore
     private let advertiser: BonjourAdvertiser
+    private let mouseInjector = MouseInjector()
+    private let keyboardInjector = KeyboardInjector()
 
-    // Called by capture/input modules when they need references.
     var onClientAuthenticated: ((ServerConnection, String) -> Void)?
     var onClientDisconnected: (() -> Void)?
 
@@ -59,12 +62,14 @@ final class ServerManager: ObservableObject {
     // MARK: - Server Lifecycle
 
     func start() {
-        // Ensure a password is set.
         if authManager.currentPassword() == nil {
-            let pin = try? authManager.generatePIN()
-            print("[Server] Generated initial PIN: \(pin ?? "error")")
+            do {
+                try authManager.generatePIN()
+                logger.info("Generated initial PIN (check Settings to view)")
+            } catch {
+                logger.error("Failed to generate PIN: \(error.localizedDescription)")
+            }
         }
-        // TODO: Generate TLS identity from Keychain in production.
         advertiser.start(tlsIdentity: nil)
         isRunning = true
         statusMessage = "Waiting for connections..."
@@ -83,7 +88,6 @@ final class ServerManager: ObservableObject {
     // MARK: - Incoming Connection
 
     private func handleIncomingConnection(_ nwConnection: NWConnection) {
-        // Reject if already connected.
         if authManager.hasActiveSession {
             nwConnection.cancel()
             return
@@ -96,7 +100,7 @@ final class ServerManager: ObservableObject {
         }
 
         client.onDisconnected = { [weak self] _ in
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
                 self?.handleClientDisconnected()
             }
         }
@@ -110,24 +114,51 @@ final class ServerManager: ObservableObject {
         switch frame.type {
         case .authRequest:
             handleAuthRequest(frame, from: client)
-        case .mouseEvent, .keyEvent, .scrollEvent:
-            // Forward to input injectors (wired up externally).
-            onClientAuthenticated != nil ? handleInputFrame(frame) : ()
+        case .mouseEvent:
+            handleInputEvent(frame, handler: handleMouseEvent)
+        case .keyEvent:
+            handleInputEvent(frame, handler: handleKeyEvent)
+        case .scrollEvent:
+            handleInputEvent(frame, handler: handleScrollEvent)
         case .keyframeRequest:
-            // Handled by capture manager (wired up externally).
-            break
+            break // Handled by capture manager (wired externally).
         case .heartbeat:
             break
         case .disconnect:
-            DispatchQueue.main.async { self.handleClientDisconnected() }
+            DispatchQueue.main.async { [weak self] in self?.handleClientDisconnected() }
         default:
             break
         }
     }
 
-    private func handleInputFrame(_ frame: ProtocolFrame) {
-        // Validate session token in the payload.
-        // Input frames are handled externally via onClientAuthenticated callbacks.
+    /// Validate session token before processing an input event.
+    private func handleInputEvent(_ frame: ProtocolFrame, handler: (ProtocolFrame) -> Void) {
+        // Extract session token from JSON payload for validation.
+        struct TokenCheck: Decodable { let sessionToken: String }
+        guard let check = try? MessageCodec.decodePayload(TokenCheck.self, from: frame),
+              authManager.validateSession(check.sessionToken) else {
+            logger.warning("Rejected input event with invalid session token")
+            return
+        }
+        handler(frame)
+    }
+
+    private func handleMouseEvent(_ frame: ProtocolFrame) {
+        guard let event = try? MessageCodec.decodePayload(MouseEvent.self, from: frame) else { return }
+        // Validate coordinates.
+        guard event.x.isFinite, event.y.isFinite, event.x >= 0, event.y >= 0 else { return }
+        mouseInjector.inject(event: event)
+    }
+
+    private func handleKeyEvent(_ frame: ProtocolFrame) {
+        guard let event = try? MessageCodec.decodePayload(KeyEvent.self, from: frame) else { return }
+        keyboardInjector.inject(event: event)
+    }
+
+    private func handleScrollEvent(_ frame: ProtocolFrame) {
+        guard let event = try? MessageCodec.decodePayload(ScrollEvent.self, from: frame) else { return }
+        guard event.deltaX.isFinite, event.deltaY.isFinite else { return }
+        mouseInjector.scroll(deltaX: Int32(event.deltaX), deltaY: Int32(event.deltaY))
     }
 
     // MARK: - Auth Flow
@@ -141,14 +172,12 @@ final class ServerManager: ObservableObject {
 
         let clientIP = client.clientIP
 
-        // Check brute force block.
         if authManager.isBlocked(ip: clientIP) {
             let result = AuthResult(success: false, reason: "Too many attempts. Try again later.")
             client.sendJSON(.authResult, payload: result)
             return
         }
 
-        // Validate password.
         guard authManager.validatePassword(request.password) else {
             authManager.recordFailedAttempt(ip: clientIP)
             let result = AuthResult(success: false, reason: "Invalid password")
@@ -158,13 +187,11 @@ final class ServerManager: ObservableObject {
 
         authManager.clearFailedAttempts(ip: clientIP)
 
-        // Check if device is trusted (skip dialog).
         if authManager.deviceIsTrusted(request.deviceUUID) {
             grantAccess(to: client, deviceName: request.deviceName)
             return
         }
 
-        // Show confirmation dialog on main thread.
         DispatchQueue.main.async { [weak self] in
             self?.showConfirmationDialog(
                 deviceName: request.deviceName,
@@ -181,8 +208,13 @@ final class ServerManager: ObservableObject {
         clientIP: String,
         client: ServerConnection
     ) {
+        // Sanitize device name: truncate and strip control characters.
+        let sanitizedName = String(
+            deviceName.prefix(50).unicodeScalars.filter { !$0.properties.isDefaultIgnorableCodePoint && $0.value >= 0x20 }
+        )
+
         let alert = NSAlert()
-        alert.messageText = "\"\(deviceName)\" (\(clientIP)) wants to connect."
+        alert.messageText = "\"\(sanitizedName)\" (\(clientIP)) wants to connect."
         alert.informativeText = "This device will be able to see your screen and control your mouse and keyboard."
         alert.alertStyle = .warning
 
@@ -194,16 +226,11 @@ final class ServerManager: ObservableObject {
 
         switch response {
         case .alertFirstButtonReturn:
-            // Allow Once
-            grantAccess(to: client, deviceName: deviceName)
-
+            grantAccess(to: client, deviceName: sanitizedName)
         case .alertSecondButtonReturn:
-            // Always Allow — save to trusted devices.
-            trustedDeviceStore.trust(deviceUUID: deviceUUID, deviceName: deviceName)
-            grantAccess(to: client, deviceName: deviceName)
-
+            trustedDeviceStore.trust(deviceUUID: deviceUUID, deviceName: sanitizedName)
+            grantAccess(to: client, deviceName: sanitizedName)
         default:
-            // Deny
             let result = AuthResult(success: false, reason: "Connection denied by user")
             client.sendJSON(.authResult, payload: result)
             client.disconnect()
@@ -211,11 +238,17 @@ final class ServerManager: ObservableObject {
     }
 
     private func grantAccess(to client: ServerConnection, deviceName: String) {
-        let token = authManager.createSession(deviceName: deviceName)
+        guard let token = authManager.createSession(deviceName: deviceName) else {
+            let result = AuthResult(success: false, reason: "Internal server error")
+            client.sendJSON(.authResult, payload: result)
+            return
+        }
+
         let result = AuthResult(success: true, sessionToken: token)
         client.sendJSON(.authResult, payload: result)
 
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             self.connectedClient = client
             self.statusMessage = "Connected to \(deviceName)"
             self.onClientAuthenticated?(client, token)

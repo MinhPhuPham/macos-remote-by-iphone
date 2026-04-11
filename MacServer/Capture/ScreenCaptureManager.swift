@@ -2,32 +2,30 @@ import Foundation
 import ScreenCaptureKit
 import CoreMedia
 import AppKit
+import os
+
+private let logger = Logger(subsystem: "com.myremote.server", category: "ScreenCapture")
 
 /// Manages screen capture via ScreenCaptureKit.
-/// Captures frames from the primary display and delivers CVPixelBuffers to the encoder.
 final class ScreenCaptureManager: NSObject, ObservableObject {
 
     @Published private(set) var isCapturing = false
     @Published private(set) var captureError: String?
 
-    /// Called for each captured frame.
     var onPixelBuffer: ((CVPixelBuffer, CMTime) -> Void)?
 
     private var stream: SCStream?
     private let captureQueue = DispatchQueue(label: "com.myremote.capture", qos: .userInteractive)
 
-    /// The captured display's full resolution.
     private(set) var displayWidth: Int = 0
     private(set) var displayHeight: Int = 0
 
     // MARK: - Permissions
 
-    /// Check if screen recording permission is granted.
     static func hasPermission() -> Bool {
         CGPreflightScreenCaptureAccess()
     }
 
-    /// Request screen recording permission (shows system dialog once).
     static func requestPermission() {
         CGRequestScreenCaptureAccess()
     }
@@ -35,6 +33,10 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
     // MARK: - Start / Stop
 
     func startCapture(scaleFactor: CGFloat = 0.5, frameRate: Int = MyRemoteConstants.defaultFrameRate) async throws {
+        guard Self.hasPermission() else {
+            throw CaptureError.permissionDenied
+        }
+
         let content = try await SCShareableContent.current
         guard let display = content.displays.first else {
             throw CaptureError.noDisplayFound
@@ -50,7 +52,6 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         config.pixelFormat = kCVPixelFormatType_32BGRA
         config.showsCursor = true
 
-        // Exclude the server's own settings window if visible.
         let filter = SCContentFilter(display: display, excludingWindows: [])
 
         let stream = SCStream(filter: filter, configuration: config, delegate: self)
@@ -67,7 +68,6 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         await MainActor.run { isCapturing = false }
     }
 
-    /// Update capture configuration (e.g., when quality changes).
     func updateConfiguration(scaleFactor: CGFloat, frameRate: Int) async throws {
         guard let stream = stream else { return }
         let content = try await SCShareableContent.current
@@ -102,9 +102,9 @@ extension ScreenCaptureManager: SCStreamOutput {
 extension ScreenCaptureManager: SCStreamDelegate {
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        DispatchQueue.main.async {
-            self.isCapturing = false
-            self.captureError = "Capture stopped: \(error.localizedDescription)"
+        DispatchQueue.main.async { [weak self] in
+            self?.isCapturing = false
+            self?.captureError = "Capture stopped: \(error.localizedDescription)"
         }
     }
 }

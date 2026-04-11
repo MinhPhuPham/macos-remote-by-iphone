@@ -35,6 +35,8 @@ struct ServerListView: View {
                 .multilineTextAlignment(.center)
         }
         .padding()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Searching for Mac. Make sure MyRemote Server is running on your Mac and both devices are on the same WiFi network.")
     }
 
     private var serverList: some View {
@@ -64,6 +66,10 @@ struct ServerListView: View {
             }
             .accessibilityLabel("\(server.name), available")
             .accessibilityHint("Double tap to connect")
+        }
+        .refreshable {
+            browser.stopBrowsing()
+            browser.startBrowsing()
         }
     }
 }

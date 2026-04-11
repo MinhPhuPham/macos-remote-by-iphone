@@ -1,22 +1,22 @@
 import Foundation
 import Network
+import os
+
+private let logger = Logger(subsystem: "com.myremote.server", category: "ServerConnection")
 
 /// Manages a single client connection on the server side.
-/// Handles reading frames, dispatching to handlers, and sending responses.
 final class ServerConnection: ObservableObject {
 
     @Published private(set) var isConnected = false
-    @Published private(set) var remoteAddress: String = ""
+    @Published private(set) var remoteAddress: String = "unknown"
 
     let connection: NWConnection
     private let codec = MessageCodec()
 
-    /// Called when a complete protocol frame is received.
     var onFrameReceived: ((ProtocolFrame, ServerConnection) -> Void)?
-    /// Called when the connection is lost or closed.
     var onDisconnected: ((ServerConnection) -> Void)?
 
-    private var heartbeatTimer: Timer?
+    private var heartbeatTimer: DispatchSourceTimer?
     private var lastActivityDate = Date()
 
     init(connection: NWConnection) {
@@ -61,7 +61,7 @@ final class ServerConnection: ObservableObject {
         let data = frame.encode()
         connection.send(content: data, completion: .contentProcessed { error in
             if let error = error {
-                print("[ServerConnection] Send error: \(error)")
+                logger.warning("Send error: \(error.localizedDescription)")
             }
         })
     }
@@ -75,11 +75,11 @@ final class ServerConnection: ObservableObject {
             let data = try MessageCodec.encode(type, payload: payload)
             connection.send(content: data, completion: .contentProcessed { error in
                 if let error = error {
-                    print("[ServerConnection] Send error: \(error)")
+                    logger.warning("Send error: \(error.localizedDescription)")
                 }
             })
         } catch {
-            print("[ServerConnection] Encoding error: \(error)")
+            logger.error("Encoding error: \(error.localizedDescription)")
         }
     }
 
@@ -99,7 +99,8 @@ final class ServerConnection: ObservableObject {
             }
 
             if isComplete || error != nil {
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
                     self.isConnected = false
                     self.stopHeartbeat()
                     self.onDisconnected?(self)
@@ -107,35 +108,38 @@ final class ServerConnection: ObservableObject {
                 return
             }
 
-            // Continue receiving.
             self.startReceiving()
         }
     }
 
-    // MARK: - Heartbeat
+    // MARK: - Heartbeat (DispatchSourceTimer, no RunLoop dependency)
 
     private func startHeartbeat() {
-        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: MyRemoteConstants.heartbeatInterval, repeats: true) { [weak self] _ in
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + MyRemoteConstants.heartbeatInterval,
+                       repeating: MyRemoteConstants.heartbeatInterval)
+        timer.setEventHandler { [weak self] in
             guard let self = self else { return }
             self.send(frame: ProtocolFrame(type: .heartbeat))
             self.checkSessionTimeout()
         }
+        timer.resume()
+        heartbeatTimer = timer
     }
 
     private func stopHeartbeat() {
-        heartbeatTimer?.invalidate()
+        heartbeatTimer?.cancel()
         heartbeatTimer = nil
     }
 
     private func checkSessionTimeout() {
         let elapsed = Date().timeIntervalSince(lastActivityDate)
         if elapsed > MyRemoteConstants.sessionTimeoutInterval {
-            print("[ServerConnection] Session timeout, disconnecting.")
+            logger.info("Session timeout, disconnecting.")
             disconnect()
         }
     }
 
-    /// IP address of the remote client.
     var clientIP: String {
         remoteAddress
     }

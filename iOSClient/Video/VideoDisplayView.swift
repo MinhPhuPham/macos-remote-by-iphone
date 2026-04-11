@@ -28,7 +28,6 @@ final class VideoDisplayUIView: UIView {
         displayLayer.frame = bounds
     }
 
-    /// Enqueue a decoded sample buffer for display.
     func enqueue(_ sampleBuffer: CMSampleBuffer) {
         if displayLayer.status == .failed {
             displayLayer.flush()
@@ -36,36 +35,57 @@ final class VideoDisplayUIView: UIView {
         displayLayer.enqueue(sampleBuffer)
     }
 
-    /// Flush the display layer (e.g., on keyframe request or reconnect).
     func flush() {
         displayLayer.flush()
     }
 }
 
 /// SwiftUI wrapper for the video display layer.
+/// Creates the UIView in `makeUIView` (proper UIViewRepresentable lifecycle).
 struct VideoDisplayView: UIViewRepresentable {
 
-    let displayView: VideoDisplayUIView
+    /// Reference to the pipeline's display view, set after creation.
+    let onViewCreated: (VideoDisplayUIView) -> Void
 
     func makeUIView(context: Context) -> VideoDisplayUIView {
-        displayView
+        let view = VideoDisplayUIView()
+        onViewCreated(view)
+        return view
     }
 
     func updateUIView(_ uiView: VideoDisplayUIView, context: Context) {}
+
+    static func dismantleUIView(_ uiView: VideoDisplayUIView, coordinator: ()) {
+        uiView.flush()
+    }
 }
 
-/// Helper to create CMSampleBuffer from a CVPixelBuffer (for enqueuing into display layer).
-extension CMSampleBuffer {
+/// Helper to create CMSampleBuffer from a CVPixelBuffer.
+/// Caches the format description to avoid per-frame allocation.
+final class SampleBufferFactory {
 
-    static func create(from pixelBuffer: CVPixelBuffer, presentationTime: CMTime) -> CMSampleBuffer? {
-        var formatDescription: CMVideoFormatDescription?
-        CMVideoFormatDescriptionCreateForImageBuffer(
-            allocator: nil,
-            imageBuffer: pixelBuffer,
-            formatDescriptionOut: &formatDescription
-        )
+    private var cachedFormatDescription: CMVideoFormatDescription?
+    private var cachedWidth: Int = 0
+    private var cachedHeight: Int = 0
 
-        guard let formatDesc = formatDescription else { return nil }
+    func create(from pixelBuffer: CVPixelBuffer, presentationTime: CMTime) -> CMSampleBuffer? {
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+
+        // Rebuild format description only when dimensions change.
+        if cachedFormatDescription == nil || width != cachedWidth || height != cachedHeight {
+            var formatDesc: CMVideoFormatDescription?
+            CMVideoFormatDescriptionCreateForImageBuffer(
+                allocator: nil,
+                imageBuffer: pixelBuffer,
+                formatDescriptionOut: &formatDesc
+            )
+            cachedFormatDescription = formatDesc
+            cachedWidth = width
+            cachedHeight = height
+        }
+
+        guard let formatDesc = cachedFormatDescription else { return nil }
 
         var timingInfo = CMSampleTimingInfo(
             duration: .invalid,

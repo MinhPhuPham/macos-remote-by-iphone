@@ -1,5 +1,8 @@
 import Foundation
 import Network
+import os
+
+private let logger = Logger(subsystem: "com.myremote.client", category: "ClientConnection")
 
 /// Connection state for the iOS client.
 enum ConnectionState: Equatable {
@@ -20,7 +23,6 @@ final class ClientConnection: ObservableObject {
     private var connection: NWConnection?
     private let codec = MessageCodec()
 
-    /// Called when a protocol frame arrives from the server.
     var onFrameReceived: ((ProtocolFrame) -> Void)?
 
     // MARK: - Connect / Disconnect
@@ -30,11 +32,11 @@ final class ClientConnection: ObservableObject {
         codec.reset()
 
         let tlsOptions = NWProtocolTLS.Options()
-        // Trust-on-first-use: accept self-signed certs.
         sec_protocol_options_set_verify_block(
             tlsOptions.securityProtocolOptions,
             { _, trust, completionHandler in
-                // In production, pin the certificate on first use.
+                // TODO: Implement trust-on-first-use certificate pinning.
+                // For now, accept self-signed certs.
                 completionHandler(true)
             },
             .main
@@ -73,8 +75,12 @@ final class ClientConnection: ObservableObject {
 
     func disconnect() {
         let frame = ProtocolFrame(type: .disconnect)
-        send(data: frame.encode())
-        connection?.cancel()
+        let data = frame.encode()
+        // Send disconnect frame, then cancel in the completion handler
+        // to ensure the frame is transmitted before the connection closes.
+        connection?.send(content: data, completion: .contentProcessed { [weak self] _ in
+            self?.connection?.cancel()
+        })
         connection = nil
         state = .disconnected
         sessionToken = nil
@@ -91,7 +97,7 @@ final class ClientConnection: ObservableObject {
         )
         do {
             let data = try MessageCodec.encode(.authRequest, payload: request)
-            send(data: data)
+            sendRaw(data: data)
             state = .waitingForApproval
         } catch {
             state = .error("Failed to encode auth request: \(error.localizedDescription)")
@@ -100,29 +106,29 @@ final class ClientConnection: ObservableObject {
 
     // MARK: - Sending
 
-    func send(data: Data) {
+    /// Internal: send raw bytes over the connection.
+    private func sendRaw(data: Data) {
         connection?.send(content: data, completion: .contentProcessed { error in
             if let error = error {
-                print("[ClientConnection] Send error: \(error)")
+                logger.warning("Send error: \(error.localizedDescription)")
             }
         })
     }
 
     func sendFrame(_ type: MessageType, payload: Data = Data()) {
         let frame = ProtocolFrame(type: type, payload: payload)
-        send(data: frame.encode())
+        sendRaw(data: frame.encode())
     }
 
     func sendJSON<T: Encodable>(_ type: MessageType, payload: T) {
         do {
             let data = try MessageCodec.encode(type, payload: payload)
-            send(data: data)
+            sendRaw(data: data)
         } catch {
-            print("[ClientConnection] Encoding error: \(error)")
+            logger.error("Encoding error: \(error.localizedDescription)")
         }
     }
 
-    /// Request a keyframe from the server.
     func requestKeyframe() {
         sendFrame(.keyframeRequest)
     }
@@ -142,8 +148,8 @@ final class ClientConnection: ObservableObject {
             }
 
             if isComplete || error != nil {
-                DispatchQueue.main.async {
-                    self.state = .disconnected
+                DispatchQueue.main.async { [weak self] in
+                    self?.state = .disconnected
                 }
                 return
             }
@@ -157,15 +163,13 @@ final class ClientConnection: ObservableObject {
         case .authResult:
             handleAuthResult(frame)
         case .heartbeat:
-            // Respond to heartbeat.
             sendFrame(.heartbeat)
         case .disconnect:
-            DispatchQueue.main.async {
-                self.state = .disconnected
-                self.sessionToken = nil
+            DispatchQueue.main.async { [weak self] in
+                self?.state = .disconnected
+                self?.sessionToken = nil
             }
         default:
-            // Forward to external handler (video, config, etc.)
             onFrameReceived?(frame)
         }
     }
@@ -173,17 +177,17 @@ final class ClientConnection: ObservableObject {
     private func handleAuthResult(_ frame: ProtocolFrame) {
         do {
             let result = try MessageCodec.decodePayload(AuthResult.self, from: frame)
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
                 if result.success, let token = result.sessionToken {
-                    self.sessionToken = token
-                    self.state = .connected
+                    self?.sessionToken = token
+                    self?.state = .connected
                 } else {
-                    self.state = .error(result.reason ?? "Authentication denied")
+                    self?.state = .error(result.reason ?? "Authentication denied")
                 }
             }
         } catch {
-            DispatchQueue.main.async {
-                self.state = .error("Invalid auth response")
+            DispatchQueue.main.async { [weak self] in
+                self?.state = .error("Invalid auth response")
             }
         }
     }

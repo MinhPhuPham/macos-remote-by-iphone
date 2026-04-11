@@ -1,25 +1,27 @@
 import Foundation
+import Security
 #if canImport(UIKit)
 import UIKit
 #endif
 
 /// Generates and persists a unique device UUID for this iOS client.
-/// The UUID is stable across app launches (stored in UserDefaults).
+/// The UUID is stored securely in the Keychain (not UserDefaults).
 enum DeviceIdentity {
 
-    private static let uuidKey = "MyRemote.DeviceUUID"
+    private static let service = "com.myremote.client"
+    private static let uuidAccount = "device-uuid"
 
-    /// The persistent device UUID. Generated once on first access.
+    /// The persistent device UUID. Generated once on first access, stored in Keychain.
     static var uuid: String {
-        if let existing = UserDefaults.standard.string(forKey: uuidKey) {
+        if let existing = readFromKeychain() {
             return existing
         }
         let newUUID = UUID().uuidString
-        UserDefaults.standard.set(newUUID, forKey: uuidKey)
+        saveToKeychain(newUUID)
         return newUUID
     }
 
-    /// A human-readable device name (e.g., "John's iPhone").
+    /// A human-readable device name.
     static var deviceName: String {
         #if canImport(UIKit)
         return UIDevice.current.name
@@ -28,9 +30,32 @@ enum DeviceIdentity {
         #endif
     }
 
-    /// Reset the device UUID (e.g., for testing).
-    /// Warning: The server will treat this as a new device.
-    static func resetUUID() {
-        UserDefaults.standard.removeObject(forKey: uuidKey)
+    // MARK: - Keychain
+
+    private static func readFromKeychain() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String:       kSecClassGenericPassword,
+            kSecAttrService as String:  service,
+            kSecAttrAccount as String:  uuidAccount,
+            kSecReturnData as String:   true,
+            kSecMatchLimit as String:   kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func saveToKeychain(_ uuid: String) {
+        guard let data = uuid.data(using: .utf8) else { return }
+        let query: [String: Any] = [
+            kSecClass as String:       kSecClassGenericPassword,
+            kSecAttrService as String:  service,
+            kSecAttrAccount as String:  uuidAccount,
+            kSecValueData as String:    data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        ]
+        SecItemDelete(query as CFDictionary) // Remove existing.
+        SecItemAdd(query as CFDictionary, nil)
     }
 }
