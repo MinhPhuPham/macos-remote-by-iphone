@@ -1,68 +1,85 @@
-# MyRemote — Control macOS from iPhone over WiFi
+# MyRemote — Control macOS from iPhone over Any Network
 
-A personal two-app system that lets you view your Mac's screen on your iPhone and control it with touch gestures and keyboard input — all over local WiFi.
+A personal two-app system that lets you view your Mac's screen on your iPhone and control it with touch gestures and keyboard input — over local WiFi or the internet (4G/5G).
 
-## Apps
+## Features
 
-| App | Platform | Role |
-|-----|----------|------|
-| **MyRemote Server** | macOS 14+ | Captures screen, streams video, receives and injects mouse/keyboard input |
-| **MyRemote Client** | iOS 17+ | Discovers server, displays stream, sends touch and keyboard events |
-
-## Key Features
-
-- **Live Screen Streaming** — H.264 encoded video at up to 30 fps via ScreenCaptureKit and VideoToolbox
-- **Full Mouse Control** — Tap, double-tap, right-click, drag, scroll, and pinch-to-zoom mapped from iOS gestures
+- **Live Screen Streaming** — H.264 hardware encoding at up to 30fps via ScreenCaptureKit + VideoToolbox
+- **Full Mouse Control** — Tap, double-tap, right-click, drag, scroll, pinch-to-zoom from iOS gestures
 - **Keyboard Input** — Virtual keyboard with sticky modifier keys (Cmd/Opt/Ctrl/Shift) and shortcut support
-- **Secure Authentication** — PIN/password auth, TLS 1.3 encryption, user confirmation dialog, trusted device management
-- **Automatic Discovery** — Bonjour/mDNS finds your Mac on the local network instantly
-- **Adaptive Quality** — Bitrate and frame rate adjust automatically based on network conditions
-- **Menu Bar App** — Server runs unobtrusively in the macOS menu bar
+- **3 Connection Modes** — Local WiFi (Bonjour auto-discovery), Pairing Code (internet via signaling server), Manual IP
+- **Adaptive Quality** — Real-time RTT measurement with automatic bitrate/FPS adjustment per network conditions
+- **Auto-Reconnect** — Exponential backoff retry on transient network failures (cellular handoffs, brief drops)
+- **Secure Authentication** — TLS 1.3, password auth, user confirmation dialog, dual rate limiting, session tokens
+- **Menu Bar App** — macOS server runs unobtrusively with status icon and pairing code display
 
 ## Architecture
 
 ```
-┌──────────────────────┐         WiFi (TLS 1.3)         ┌──────────────────────┐
-│    macOS Server      │ <─────────────────────────────> │    iOS Client        │
-│                      │                                 │                      │
-│  ScreenCaptureKit    │ ── H.264 Video Frames ───────>  │  VideoToolbox        │
-│  VideoToolbox        │                                 │  AVSampleBuffer      │
-│                      │                                 │  DisplayLayer        │
-│  CGEvent Injection   │ <── Mouse/Key/Scroll Events ──  │                      │
-│  (Mouse + Keyboard)  │                                 │  Gesture Recognizers │
-│                      │                                 │  Virtual Keyboard    │
-│  NWListener          │ <── Bonjour Discovery ────────  │  NWBrowser           │
-│  (Bonjour + TLS)     │                                 │  NWConnection        │
-└──────────────────────┘                                 └──────────────────────┘
+┌──────────────┐                                    ┌──────────────┐
+│  iOS Client  │                                    │ macOS Server │
+│              │     Direct P2P (TLS 1.3 TCP)       │              │
+│ Touch Input ─┼───────────────────────────────────>│─ CGEvent     │
+│              │                                    │  Injection   │
+│ Video Display│<───────────────────────────────────┼─ H.264 Stream│
+│              │                                    │  (SCStream)  │
+└──────┬───────┘                                    └──────┬───────┘
+       │                                                   │
+       │  ┌─────────────────────────┐                      │
+       └──┤  Signaling Server       ├──────────────────────┘
+          │  (code → IP lookup only)│
+          │  No video/input traffic │
+          └─────────────────────────┘
 ```
 
-Both apps share a `MyRemoteShared` framework containing the binary protocol definitions, message codec, and key code mappings.
+All video streaming and input control flows **directly between devices** (P2P). The signaling server is only used for pairing code lookup — it never sees any traffic.
+
+## Connection Modes
+
+| Mode | Use Case | How It Works |
+|------|----------|-------------|
+| **Local WiFi** | Same network | Bonjour auto-discovers your Mac |
+| **Pairing Code** | Any network (4G/5G) | Mac shows 6-char code → iPhone looks it up → direct P2P |
+| **Manual IP** | Fallback | Enter hostname:port manually |
+
+### Pairing Code Flow
+
+```
+Mac starts → generates code "HK4-M7N" → registers with signaling server
+iPhone user enters "HK4M7N" → server returns Mac's IP:port → direct connection
+```
 
 ## Security Model
 
 ### Authentication Flow
 
-1. **Discovery** — iOS client finds the Mac via Bonjour (`_myremote._tcp`)
-2. **TLS Connection** — Encrypted TCP connection established (self-signed cert, pinned on first use)
-3. **Password Auth** — Client sends PIN or password over the encrypted channel
-4. **User Confirmation** — macOS server shows a native dialog:
-   - **Deny** — Reject the connection
-   - **Allow Once** — Grant access for this session only
-   - **Always Allow** — Save device as trusted (skips dialog on future connects, still requires password)
-5. **Session Token** — On success, server issues a 256-bit session token for subsequent messages
+1. **TLS 1.3** — Encrypted TCP connection (self-signed certificate)
+2. **Password Auth** — Client sends PIN/password over TLS
+3. **User Confirmation** — Mac shows native dialog: Deny / Allow Once / Always Allow
+4. **Session Token** — 256-bit cryptographic token for all subsequent messages
 
-### Security Details
+### Protection Layers
 
-| Aspect | Implementation |
-|--------|----------------|
-| Transport | TLS 1.3 over TCP (self-signed cert, pinned on first connection) |
-| Password storage | macOS Keychain (`kSecClassGenericPassword`) |
-| Brute force protection | 5 failed attempts from same IP → blocked for 5 minutes |
-| Session timeout | Auto-disconnect after 30 minutes of no input activity |
+| Layer | What It Does |
+|-------|-------------|
+| **TLS 1.3** | All traffic encrypted |
+| **Auth Timeout** | Unauthenticated connections kicked after 10 seconds |
+| **Dual Rate Limiting** | Failed attempts tracked by both IP and device UUID |
+| **IP Blocking** | 5 failures from same IP → blocked 5 minutes |
+| **Global Lockout** | 20 failures from any source in 10 min → server pauses all auth |
+| **Constant-Time Compare** | Password and token comparison resistant to timing attacks |
+| **Frame Size Limit** | Max 16MB payload, 32MB buffer (prevents memory DoS) |
+| **Session Tokens** | 256-bit random, validated on every input event |
+| **Signaling API Key** | Registration/deletion requires secret key |
+| **Signaling Rate Limit** | 10 lookups/min, 3 registrations/min per IP |
+
+### Trusted Devices
+
+Devices approved with "Always Allow" skip the confirmation dialog on reconnection (password still required). Manage trusted devices in Settings → Devices → Revoke.
 
 ## Message Protocol
 
-Custom binary protocol over a single TLS-encrypted TCP connection.
+Custom binary protocol over TLS-encrypted TCP.
 
 ### Frame Format
 
@@ -70,115 +87,142 @@ Custom binary protocol over a single TLS-encrypted TCP connection.
 ┌─────────┬────────────┬─────────────────┐
 │  Type   │  Length     │  Payload        │
 │ 1 byte  │  4 bytes   │  variable       │
-│         │  (UInt32)  │                 │
+│         │  (UInt32)  │  (max 16 MB)    │
 └─────────┴────────────┴─────────────────┘
 ```
 
 ### Message Types
 
-| Type | Name | Direction | Payload |
+| Type | Name | Direction | Purpose |
 |------|------|-----------|---------|
-| `0x01` | `AUTH_REQUEST` | Client → Server | JSON: `{ password, deviceUUID, deviceName }` |
-| `0x02` | `AUTH_RESULT` | Server → Client | JSON: `{ success, sessionToken?, reason? }` |
-| `0x03` | `VIDEO_CONFIG` | Server → Client | H.264 SPS/PPS parameters |
-| `0x04` | `VIDEO_FRAME` | Server → Client | H.264 NAL unit + timestamp |
-| `0x05` | `MOUSE_EVENT` | Client → Server | JSON: `{ sessionToken, type, x, y, button? }` |
-| `0x06` | `KEY_EVENT` | Client → Server | JSON: `{ sessionToken, keyCode, isDown, modifiers }` |
-| `0x07` | `SCROLL_EVENT` | Client → Server | JSON: `{ sessionToken, deltaX, deltaY }` |
-| `0x08` | `HEARTBEAT` | Both | Empty (keepalive every 5 seconds) |
-| `0x09` | `DISCONNECT` | Both | Empty |
-| `0x0A` | `KEYFRAME_REQUEST` | Client → Server | Empty (request a new IDR frame) |
-| `0x0B` | `CONFIG_UPDATE` | Server → Client | JSON: `{ screenWidth, screenHeight, fps }` |
+| `0x01` | AUTH_REQUEST | Client → Server | Password + device UUID |
+| `0x02` | AUTH_RESULT | Server → Client | Success/failure + session token |
+| `0x03` | VIDEO_CONFIG | Server → Client | H.264 SPS/PPS parameters |
+| `0x04` | VIDEO_FRAME | Server → Client | H.264 NAL unit |
+| `0x05` | MOUSE_EVENT | Client → Server | Click, move, drag coordinates |
+| `0x06` | KEY_EVENT | Client → Server | Key code + modifiers |
+| `0x07` | SCROLL_EVENT | Client → Server | Scroll delta X/Y |
+| `0x08` | HEARTBEAT | Both | Keepalive |
+| `0x09` | DISCONNECT | Both | Graceful close |
+| `0x0A` | KEYFRAME_REQ | Client → Server | Request IDR frame |
+| `0x0B` | CONFIG_UPDATE | Server → Client | Screen dimensions + FPS |
+| `0x0C` | PING | Client → Server | RTT measurement |
+| `0x0D` | PONG | Server → Client | RTT response |
+| `0x0E` | QUALITY_UPDATE | Client → Server | Request bitrate/FPS change |
+
+## Adaptive Quality
+
+The client continuously measures round-trip time via ping/pong and adjusts quality:
+
+| Quality | LAN Threshold | WAN Threshold | Bitrate | FPS |
+|---------|--------------|---------------|---------|-----|
+| **Good** | < 50ms | < 100ms | 6 / 3 Mbps | 30 / 24 |
+| **Fair** | 50-100ms | 100-250ms | 4 / 1.5 Mbps | 30 / 24 |
+| **Poor** | > 100ms | > 250ms | 2 / 0.5 Mbps | 15 / 10 |
+
+Status bar shows real-time FPS, RTT latency, and quality level indicator.
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|------------|
-| UI Framework | **SwiftUI** (both apps) |
+| UI Framework | SwiftUI (both apps) |
 | Screen Capture | ScreenCaptureKit (`SCStream`) |
 | Video Encoding | VideoToolbox (`VTCompressionSession`, H.264) |
 | Video Decoding | VideoToolbox (`VTDecompressionSession`) |
 | Video Display | `AVSampleBufferDisplayLayer` |
 | Networking | Network.framework (`NWListener`, `NWConnection`, `NWBrowser`) |
-| Service Discovery | Bonjour / mDNS (`_myremote._tcp`) |
-| Input Injection | `CGEvent` (mouse and keyboard) |
-| Secure Storage | macOS Keychain |
-| Encryption | TLS 1.3 (via Network.framework) |
+| Discovery | Bonjour / mDNS (`_myremote._tcp`) |
+| Input Injection | `CGEvent` (mouse + keyboard) |
+| Secure Storage | macOS Keychain + iOS Keychain |
+| Encryption | TLS 1.3 (Network.framework) |
+| Signaling Server | Node.js (zero dependencies) |
+| Logging | `os.Logger` (structured, level-based) |
 
-## SwiftUI Best Practices
+## Project Structure
 
-This project follows the [SwiftUI Expert Skill](https://github.com/AvdLee/SwiftUI-Agent-Skill) guidelines:
+```
+MyRemoteShared/Sources/         Shared framework (both platforms)
+├── Protocol.swift              Message types, frame codec, payload structs
+├── MessageCodec.swift          Thread-safe streaming decoder
+├── Constants.swift             LAN/WAN presets, ConnectionMode enum
+├── KeyCodeMap.swift            Full ANSI keyboard mapping
+└── PairingModels.swift         Pairing code generation/lookup types
 
-### State Management
+MacServer/                      macOS server app
+├── App/
+│   ├── MyRemoteServerApp.swift MenuBarExtra entry point
+│   ├── ServerManager.swift     Central coordinator (auth, input, streaming)
+│   ├── MenuBarView.swift       Menu bar UI + pairing code display
+│   └── SettingsView.swift      Password, devices, quality, permissions
+├── Auth/
+│   ├── AuthManager.swift       Dual rate limiting, constant-time compare
+│   ├── KeychainHelper.swift    Secure storage, token generation
+│   └── TrustedDeviceStore.swift Persistent trusted device list
+├── Network/
+│   ├── BonjourAdvertiser.swift NWListener + Bonjour + TLS
+│   ├── ServerConnection.swift  Per-client connection + auth timeout
+│   └── PairingCodeManager.swift Signaling server registration
+├── Capture/
+│   ├── ScreenCaptureManager.swift SCStream with permission checks
+│   └── VideoEncoder.swift      H.264 encoding + force keyframe
+└── Input/
+    ├── MouseInjector.swift     CGEvent mouse/scroll injection
+    └── KeyboardInjector.swift  CGEvent keyboard injection
 
-- `@State` properties are always `private`
-- `@StateObject` for view-owned objects (e.g., `ScreenCaptureManager`, `ServerConnection`)
-- `@ObservedObject` for injected dependencies
-- iOS 17+: prefer `@Observable` macro with `@State`; use `@Bindable` for injected observables needing bindings
-- Separate business logic from views for testability
+iOSClient/                      iOS client app
+├── App/
+│   ├── MyRemoteClientApp.swift Entry point + scenePhase handling
+│   └── ContentView.swift       3-tab navigation (WiFi/Code/Manual)
+├── Auth/
+│   ├── PasswordEntryView.swift Password input UI
+│   └── DeviceIdentity.swift    Device UUID (Keychain-backed)
+├── Network/
+│   ├── ServerBrowser.swift     Bonjour discovery
+│   ├── ClientConnection.swift  TLS + reconnect + RTT + adaptive quality
+│   ├── NetworkQualityMonitor.swift Ping/pong RTT + quality decisions
+│   └── PairingCodeLookup.swift Signaling server code lookup
+├── Video/
+│   ├── VideoDecoder.swift      Thread-safe H.264 decoding
+│   └── VideoDisplayView.swift  AVSampleBufferDisplayLayer + cached format
+├── Input/
+│   ├── GestureHandler.swift    7 gestures with pre-created haptics
+│   ├── VirtualKeyboardView.swift Hidden UITextField capture
+│   └── ModifierKeysBar.swift   Sticky Cmd/Opt/Ctrl/Shift toggles
+└── Views/
+    ├── ServerListView.swift    Bonjour server list + pull-to-refresh
+    ├── RemoteSessionView.swift Full-screen session (video + input + toolbar)
+    ├── PairingCodeView.swift   6-char code entry + lookup
+    ├── ManualConnectionView.swift Manual host:port entry
+    ├── ConnectionStatusBar.swift FPS + RTT + quality overlay
+    └── ToolbarView.swift       Keyboard toggle + disconnect
 
-### View Composition
+SignalingServer/                Lightweight pairing code server
+├── server.js                  Node.js HTTP (rate limit, API key, anti-squat)
+└── package.json               Zero dependencies, Node.js 18+
+```
 
-- Extract complex view bodies into focused subviews early
-- Use `@ViewBuilder` for conditional content
-- `ForEach` always uses stable identity (device UUIDs, not indices)
-- Constant number of views per `ForEach` element
+**38 Swift files** + **2 server files** + **2 documentation files** = **42 files total**
 
-### macOS Patterns
+## Setup Guide
 
-- `MenuBarExtra` for the menu bar app (server)
-- `Settings` scene for the preferences window
-- `Commands` for menu bar customization
-- Proper window sizing and toolbar styling
-
-### Performance
-
-- Minimize unnecessary state updates in hot paths (frame rendering, input handling)
-- Use `.animation(_:value:)` with explicit `value` parameter
-- Profile with `Self._printChanges()` during development
-
-### Accessibility
-
-- VoiceOver labels on all interactive elements
-- Dynamic Type support throughout
-- Accessibility grouping for related controls (modifier keys bar)
-
-### Version Gating
-
-- `#available` checks with sensible fallbacks for platform-specific APIs
-- Graceful degradation on older OS versions
-
-## macOS Permissions
-
-The server app requires these permissions (checked and prompted on first launch):
-
-| Permission | Why | Check |
-|------------|-----|-------|
-| **Screen Recording** | ScreenCaptureKit | `CGPreflightScreenCaptureAccess()` / `CGRequestScreenCaptureAccess()` |
-| **Accessibility** | CGEvent input injection | `AXIsProcessTrusted()` with options prompt |
-| **Local Network** | Bonjour + TCP connections | Automatic prompt on first network use |
-
-## Project Setup
-
-### Xcode Workspace
-
-**Workspace:** `MyRemote.xcworkspace`
+### 1. Xcode Workspace
 
 | Target | Platform | Bundle ID |
 |--------|----------|-----------|
 | MyRemoteServer | macOS 14+ | `com.yourname.myremote.server` |
 | MyRemoteClient | iOS 17+ | `com.yourname.myremote.client` |
-| MyRemoteShared | Framework (both) | `com.yourname.myremote.shared` |
+| MyRemoteShared | Framework | `com.yourname.myremote.shared` |
 
-### Entitlements (macOS Server)
+### 2. macOS Permissions (prompted on first launch)
 
-```xml
-<key>com.apple.security.app-sandbox</key>    <false/>
-<key>com.apple.security.network.server</key> <true/>
-<key>com.apple.security.network.client</key> <true/>
-```
+| Permission | Why | Check |
+|------------|-----|-------|
+| Screen Recording | ScreenCaptureKit | `CGPreflightScreenCaptureAccess()` |
+| Accessibility | CGEvent injection | `AXIsProcessTrusted()` |
+| Local Network | Bonjour + TCP | Automatic system prompt |
 
-### Info.plist (iOS Client)
+### 3. iOS Info.plist
 
 ```xml
 <key>NSLocalNetworkUsageDescription</key>
@@ -187,23 +231,31 @@ The server app requires these permissions (checked and prompted on first launch)
 <array><string>_myremote._tcp</string></array>
 ```
 
-## Performance Targets
+### 4. Signaling Server (for internet access)
 
-| Metric | Target | Approach |
-|--------|--------|----------|
-| Latency (input → display) | < 100ms | Hardware encoding, direct TCP send, no buffering |
-| Frame rate | 30 fps | ScreenCaptureKit minimum interval 33ms |
-| Bandwidth | 4-8 Mbps | H.264 Main profile, adaptive bitrate |
-| Connection time | < 3 seconds | Bonjour discovery + TLS handshake |
+```bash
+cd SignalingServer
+API_KEY=your-secret-key-here node server.js
+```
 
-## Future Enhancements
+Deploy to any VPS ($5/mo) or serverless platform. Update `signalingBaseURL` and `apiKey` in `PairingCodeManager.swift` and `PairingCodeLookup.swift`.
 
-- **Clipboard sync** — Share clipboard between Mac and iPhone
-- **File transfer** — Drag files between devices
-- **Audio streaming** — Forward Mac audio via ScreenCaptureKit audio capture
-- **Multi-display support** — Choose which display to stream
-- **Remote access over internet** — Relay server or Tailscale/WireGuard for WAN access
-- **Touch Bar emulation** — Virtual Touch Bar for supported MacBook Pro models
+### 5. Port Forwarding (for internet access)
+
+Forward TCP port **5910** on your router to your Mac's local IP. Required for iPhone to reach your Mac over the internet.
+
+## Gesture Mapping
+
+| iOS Gesture | Mouse Action |
+|-------------|-------------|
+| Single tap | Left click |
+| Double tap | Double click |
+| Two-finger tap | Right click |
+| One-finger pan | Mouse move |
+| Long press + drag | Click and drag |
+| Two-finger pan | Scroll |
+| Pinch | Zoom (client-side) |
+| Two-finger double tap | Reset zoom |
 
 ## License
 
