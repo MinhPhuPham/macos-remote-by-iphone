@@ -16,7 +16,11 @@ final class ServerConnection: ObservableObject {
     var onFrameReceived: ((ProtocolFrame, ServerConnection) -> Void)?
     var onDisconnected: ((ServerConnection) -> Void)?
 
+    /// Set to true once the client has authenticated. Used by the auth timeout.
+    var isAuthenticated = false
+
     private var heartbeatTimer: DispatchSourceTimer?
+    private var authTimeoutTimer: DispatchSourceTimer?
     private var lastActivityDate = Date()
 
     init(connection: NWConnection) {
@@ -37,9 +41,11 @@ final class ServerConnection: ObservableObject {
                     self.isConnected = true
                     self.startReceiving()
                     self.startHeartbeat()
+                    self.startAuthTimeout()
                 case .failed, .cancelled:
                     self.isConnected = false
                     self.stopHeartbeat()
+                    self.cancelAuthTimeout()
                     self.onDisconnected?(self)
                 default:
                     break
@@ -52,6 +58,7 @@ final class ServerConnection: ObservableObject {
     func disconnect() {
         send(frame: ProtocolFrame(type: .disconnect))
         stopHeartbeat()
+        cancelAuthTimeout()
         connection.cancel()
     }
 
@@ -140,6 +147,28 @@ final class ServerConnection: ObservableObject {
             logger.info("Session timeout, disconnecting.")
             disconnect()
         }
+    }
+
+    // MARK: - Auth Timeout
+
+    /// Disconnect if client hasn't authenticated within the timeout period.
+    private func startAuthTimeout() {
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + MyRemoteConstants.authTimeoutInterval)
+        timer.setEventHandler { [weak self] in
+            guard let self = self else { return }
+            if !self.isAuthenticated {
+                logger.info("Auth timeout — disconnecting unauthenticated client \(self.remoteAddress)")
+                self.disconnect()
+            }
+        }
+        timer.resume()
+        authTimeoutTimer = timer
+    }
+
+    private func cancelAuthTimeout() {
+        authTimeoutTimer?.cancel()
+        authTimeoutTimer = nil
     }
 
     var clientIP: String {

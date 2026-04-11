@@ -51,7 +51,14 @@ public struct ProtocolFrame: Sendable {
         let typeByte = data[data.startIndex]
         let lengthSlice = data[(data.startIndex + 1)..<(data.startIndex + 5)]
         let length = lengthSlice.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
-        let totalLength = 5 + Int(length)
+        let payloadLength = Int(length)
+        let totalLength = 5 + payloadLength
+
+        // Reject oversized frames to prevent memory exhaustion (DoS protection).
+        guard payloadLength <= MyRemoteConstants.maxFramePayloadSize else {
+            return (frame: nil, consumed: totalLength)
+        }
+
         guard data.count >= totalLength else { return nil }
 
         // Unknown type: skip the frame but still consume the bytes.

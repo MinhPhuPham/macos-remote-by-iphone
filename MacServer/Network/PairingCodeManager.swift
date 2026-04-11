@@ -15,15 +15,18 @@ final class PairingCodeManager: ObservableObject {
 
     private let port: UInt16
     private let signalingURL: URL
+    private let apiKey: String
     private var refreshTimer: DispatchSourceTimer?
 
     /// How often to refresh the registration (keep-alive). Server expires entries after 2x this.
     private let refreshInterval: TimeInterval = 30
 
     init(port: UInt16 = MyRemoteConstants.defaultPort,
-         signalingBaseURL: String = "https://myremote-signal.example.com") {
+         signalingBaseURL: String = "https://myremote-signal.example.com",
+         apiKey: String = "") {
         self.port = port
         self.signalingURL = URL(string: signalingBaseURL)!
+        self.apiKey = apiKey
     }
 
     // MARK: - Generate & Register
@@ -50,6 +53,9 @@ final class PairingCodeManager: ObservableObject {
         let url = signalingURL.appendingPathComponent("/api/pairing/\(currentCode)")
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
+        if !apiKey.isEmpty {
+            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        }
 
         URLSession.shared.dataTask(with: request) { _, _, _ in
             // Best-effort unregister.
@@ -75,6 +81,9 @@ final class PairingCodeManager: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if !apiKey.isEmpty {
+            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        }
 
         do {
             request.httpBody = try JSONEncoder().encode(registration)

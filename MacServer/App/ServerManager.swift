@@ -189,21 +189,23 @@ final class ServerManager: ObservableObject {
         let clientIP = client.clientIP
         let deviceUUID = request.deviceUUID
 
-        // Rate limit by device UUID (not IP) — IPs change on cellular networks.
-        if authManager.isBlocked(deviceUUID: deviceUUID) {
-            let result = AuthResult(success: false, reason: "Too many attempts. Try again later.")
+        // Dual rate limiting: check both IP and device UUID.
+        let blockCheck = authManager.isBlocked(ip: clientIP, deviceUUID: deviceUUID)
+        if blockCheck.blocked {
+            let result = AuthResult(success: false, reason: blockCheck.reason ?? "Too many attempts.")
             client.sendJSON(.authResult, payload: result)
             return
         }
 
         guard authManager.validatePassword(request.password) else {
-            authManager.recordFailedAttempt(deviceUUID: deviceUUID)
+            authManager.recordFailedAttempt(ip: clientIP, deviceUUID: deviceUUID)
             let result = AuthResult(success: false, reason: "Invalid password")
             client.sendJSON(.authResult, payload: result)
             return
         }
 
-        authManager.clearFailedAttempts(deviceUUID: deviceUUID)
+        authManager.clearFailedAttempts(ip: clientIP, deviceUUID: deviceUUID)
+        client.isAuthenticated = true
 
         if authManager.deviceIsTrusted(request.deviceUUID) {
             grantAccess(to: client, deviceName: request.deviceName)

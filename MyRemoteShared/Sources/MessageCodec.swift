@@ -37,10 +37,17 @@ public final class MessageCodec: @unchecked Sendable {
     // MARK: - Decoding (streaming)
 
     /// Append incoming bytes to the internal buffer.
-    public func append(_ data: Data) {
+    /// Returns false if the buffer exceeds the max size (connection should be dropped).
+    @discardableResult
+    public func append(_ data: Data) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         buffer.append(data)
+        if buffer.count > MyRemoteConstants.maxBufferSize {
+            buffer.removeAll()
+            return false
+        }
+        return true
     }
 
     /// Try to extract all complete frames from the buffer.

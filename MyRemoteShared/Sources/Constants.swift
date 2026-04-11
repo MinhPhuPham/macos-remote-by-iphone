@@ -26,6 +26,15 @@ public enum MyRemoteConstants {
     /// Session token length in bytes.
     public static let sessionTokenLength = 32 // 256 bits
 
+    /// Maximum protocol frame payload size (16 MB). Frames exceeding this are rejected.
+    public static let maxFramePayloadSize: Int = 16_777_216
+
+    /// Maximum codec buffer size (32 MB). Connections exceeding this are dropped.
+    public static let maxBufferSize: Int = 33_554_432
+
+    /// Seconds a connection has to authenticate before being auto-disconnected.
+    public static let authTimeoutInterval: TimeInterval = 10.0
+
     /// Keyframe interval (in frames).
     public static let keyFrameInterval: Int = 60
 
