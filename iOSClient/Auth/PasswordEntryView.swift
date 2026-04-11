@@ -19,6 +19,7 @@ struct PasswordEntryView: View {
             connectButton
         }
         .padding(32)
+        .navigationTitle("Connect")
         .onAppear {
             isPasswordFieldFocused = true
         }

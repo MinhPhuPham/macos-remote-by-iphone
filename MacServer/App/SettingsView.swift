@@ -51,9 +51,11 @@ struct SettingsView: View {
                         Circle()
                             .fill(server.isRunning ? Color.green : Color.gray)
                             .frame(width: 8, height: 8)
+                            .accessibilityHidden(true)
                         Text(server.isRunning ? "Running" : "Stopped")
                     }
                 }
+                .accessibilityLabel("Server status: \(server.isRunning ? "running" : "stopped")")
             }
 
             Section("Permissions") {
@@ -69,6 +71,8 @@ struct SettingsView: View {
                         }
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Screen Recording permission: \(ScreenCaptureManager.hasPermission() ? "granted" : "not granted")")
 
                 HStack {
                     Text("Accessibility")
@@ -82,6 +86,8 @@ struct SettingsView: View {
                         }
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Accessibility permission: \(MouseInjector.hasAccessibilityPermission() ? "granted" : "not granted")")
             }
         }
         .formStyle(.grouped)

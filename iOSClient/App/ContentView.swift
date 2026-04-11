@@ -8,6 +8,7 @@ struct ContentView: View {
 
     @State private var selectedServer: DiscoveredServer?
     @State private var navigationPath = NavigationPath()
+    @State private var pendingPassword: String?
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -29,6 +30,12 @@ struct ContentView: View {
         }
         .onChange(of: connection.state) { _, newState in
             switch newState {
+            case .authenticating:
+                // Connection is ready — send the pending auth request.
+                if let password = pendingPassword {
+                    connection.sendAuthRequest(password: password)
+                    pendingPassword = nil
+                }
             case .connected:
                 navigationPath = NavigationPath()
                 navigationPath.append("session")
@@ -54,11 +61,8 @@ struct ContentView: View {
                 errorView(message: message, server: server)
             default:
                 PasswordEntryView(serverName: server.name) { password in
+                    pendingPassword = password
                     connection.connect(to: server.endpoint)
-                    // Delay slightly to allow connection to establish.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        connection.sendAuthRequest(password: password)
-                    }
                 }
             }
         }

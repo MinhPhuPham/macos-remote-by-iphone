@@ -31,6 +31,7 @@ struct MenuBarView: View {
                 Circle()
                     .fill(statusColor)
                     .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
                 Text(server.statusMessage)
                     .font(.subheadline)
             }
@@ -43,6 +44,8 @@ struct MenuBarView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Server status: \(server.statusMessage)")
     }
 
     private var controlsSection: some View {
