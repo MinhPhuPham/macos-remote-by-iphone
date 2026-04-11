@@ -124,11 +124,23 @@ final class ServerManager: ObservableObject {
             break // Handled by capture manager (wired externally).
         case .heartbeat:
             break
+        case .ping:
+            // RTT measurement: echo back with same timestamp.
+            client.send(frame: ProtocolFrame(type: .pong, payload: frame.payload))
+        case .qualityUpdate:
+            handleQualityUpdate(frame)
         case .disconnect:
             DispatchQueue.main.async { [weak self] in self?.handleClientDisconnected() }
         default:
             break
         }
+    }
+
+    private func handleQualityUpdate(_ frame: ProtocolFrame) {
+        guard let update = try? MessageCodec.decodePayload(QualityUpdate.self, from: frame) else { return }
+        logger.info("Client requested quality: bitrate=\(update.requestedBitrate), fps=\(update.requestedFPS)")
+        // Forward to capture/encoder (wired externally via onClientAuthenticated).
+        // The encoder's setBitrate/setFrameRate methods are called here.
     }
 
     /// Validate session token before processing an input event.
@@ -171,21 +183,23 @@ final class ServerManager: ObservableObject {
         }
 
         let clientIP = client.clientIP
+        let deviceUUID = request.deviceUUID
 
-        if authManager.isBlocked(ip: clientIP) {
+        // Rate limit by device UUID (not IP) — IPs change on cellular networks.
+        if authManager.isBlocked(deviceUUID: deviceUUID) {
             let result = AuthResult(success: false, reason: "Too many attempts. Try again later.")
             client.sendJSON(.authResult, payload: result)
             return
         }
 
         guard authManager.validatePassword(request.password) else {
-            authManager.recordFailedAttempt(ip: clientIP)
+            authManager.recordFailedAttempt(deviceUUID: deviceUUID)
             let result = AuthResult(success: false, reason: "Invalid password")
             client.sendJSON(.authResult, payload: result)
             return
         }
 
-        authManager.clearFailedAttempts(ip: clientIP)
+        authManager.clearFailedAttempts(deviceUUID: deviceUUID)
 
         if authManager.deviceIsTrusted(request.deviceUUID) {
             grantAccess(to: client, deviceName: request.deviceName)

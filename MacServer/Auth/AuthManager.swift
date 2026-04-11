@@ -12,7 +12,7 @@ final class AuthManager: ObservableObject {
 
     private let trustedDeviceStore: TrustedDeviceStore
 
-    /// Tracks failed attempts per IP for brute-force protection.
+    /// Tracks failed attempts per device UUID (not IP, which changes on cellular).
     /// Protected by `lock` for thread safety — accessed from network callbacks.
     private var failedAttempts: [String: (count: Int, lastAttempt: Date)] = [:]
     private let lock = NSLock()
@@ -43,38 +43,38 @@ final class AuthManager: ObservableObject {
 
     // MARK: - Brute Force Protection
 
-    /// Check if an IP address is currently blocked.
-    func isBlocked(ip: String) -> Bool {
+    /// Check if a device UUID is currently blocked.
+    func isBlocked(deviceUUID: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard let record = failedAttempts[ip] else { return false }
+        guard let record = failedAttempts[deviceUUID] else { return false }
         if record.count >= MyRemoteConstants.maxFailedAuthAttempts {
             let elapsed = Date().timeIntervalSince(record.lastAttempt)
             if elapsed < MyRemoteConstants.authBlockDuration {
                 return true
             } else {
-                failedAttempts.removeValue(forKey: ip)
+                failedAttempts.removeValue(forKey: deviceUUID)
                 return false
             }
         }
         return false
     }
 
-    /// Record a failed authentication attempt from an IP.
-    func recordFailedAttempt(ip: String) {
+    /// Record a failed authentication attempt from a device.
+    func recordFailedAttempt(deviceUUID: String) {
         lock.lock()
         defer { lock.unlock() }
-        var record = failedAttempts[ip] ?? (count: 0, lastAttempt: Date())
+        var record = failedAttempts[deviceUUID] ?? (count: 0, lastAttempt: Date())
         record.count += 1
         record.lastAttempt = Date()
-        failedAttempts[ip] = record
+        failedAttempts[deviceUUID] = record
     }
 
-    /// Clear failed attempts for an IP (e.g., on successful auth).
-    func clearFailedAttempts(ip: String) {
+    /// Clear failed attempts for a device (e.g., on successful auth).
+    func clearFailedAttempts(deviceUUID: String) {
         lock.lock()
         defer { lock.unlock() }
-        failedAttempts.removeValue(forKey: ip)
+        failedAttempts.removeValue(forKey: deviceUUID)
     }
 
     // MARK: - Password Validation

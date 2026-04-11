@@ -83,7 +83,10 @@ struct RemoteSessionView: View {
             if showStatusBar {
                 ConnectionStatusBar(
                     fps: pipeline.fps,
-                    isConnected: connection.state == .connected
+                    isConnected: connection.state == .connected,
+                    rtt: connection.qualityMonitor.averageRTT,
+                    qualityLevel: connection.qualityMonitor.qualityLevel,
+                    connectionMode: connection.connectionMode
                 )
             }
 

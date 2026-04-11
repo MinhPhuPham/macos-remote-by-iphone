@@ -15,6 +15,9 @@ public enum MessageType: UInt8, Sendable {
     case disconnect      = 0x09
     case keyframeRequest = 0x0A
     case configUpdate    = 0x0B
+    case ping            = 0x0C  // RTT measurement: client → server
+    case pong            = 0x0D  // RTT measurement: server → client
+    case qualityUpdate   = 0x0E  // Client → Server: request bitrate/fps change
 }
 
 // MARK: - Protocol Frame
@@ -153,5 +156,31 @@ public struct ConfigUpdate: Codable, Sendable {
         self.screenWidth = screenWidth
         self.screenHeight = screenHeight
         self.fps = fps
+    }
+}
+
+// MARK: - RTT & Adaptive Quality Payloads
+
+/// Ping payload for RTT measurement.
+public struct PingPayload: Codable, Sendable {
+    public let timestamp: UInt64  // milliseconds since epoch
+
+    public init() {
+        self.timestamp = UInt64(Date().timeIntervalSince1970 * 1000)
+    }
+
+    public init(timestamp: UInt64) {
+        self.timestamp = timestamp
+    }
+}
+
+/// Client → Server: request quality change based on network conditions.
+public struct QualityUpdate: Codable, Sendable {
+    public let requestedBitrate: Int
+    public let requestedFPS: Int
+
+    public init(requestedBitrate: Int, requestedFPS: Int) {
+        self.requestedBitrate = requestedBitrate
+        self.requestedFPS = requestedFPS
     }
 }

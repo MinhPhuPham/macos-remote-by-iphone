@@ -115,9 +115,11 @@ final class ServerConnection: ObservableObject {
     // MARK: - Heartbeat (DispatchSourceTimer, no RunLoop dependency)
 
     private func startHeartbeat() {
+        // Use WAN interval as default since server doesn't know client's network type.
+        // Client also sends its own heartbeats at its preferred interval.
+        let interval = MyRemoteConstants.WAN.heartbeatInterval
         let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + MyRemoteConstants.heartbeatInterval,
-                       repeating: MyRemoteConstants.heartbeatInterval)
+        timer.schedule(deadline: .now() + interval, repeating: interval)
         timer.setEventHandler { [weak self] in
             guard let self = self else { return }
             self.send(frame: ProtocolFrame(type: .heartbeat))
