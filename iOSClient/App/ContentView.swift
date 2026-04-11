@@ -3,8 +3,15 @@ import SwiftUI
 /// Type-safe navigation routes.
 enum Route: Hashable {
     case password
-    case manualPassword(host: String, port: UInt16)
+    case wanPassword(host: String, port: UInt16)
     case session
+}
+
+/// Connection tab selection.
+enum ConnectionTab: String, CaseIterable {
+    case local = "Local WiFi"
+    case code = "Pairing Code"
+    case manual = "Manual IP"
 }
 
 /// Root view: NavigationStack with LAN/WAN connection modes.
@@ -16,7 +23,7 @@ struct ContentView: View {
     @State private var selectedServer: DiscoveredServer?
     @State private var navigationPath = NavigationPath()
     @State private var pendingPassword: String?
-    @State private var connectionTab: ConnectionMode = .lan
+    @State private var connectionTab: ConnectionTab = .local
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -24,14 +31,18 @@ struct ContentView: View {
                 connectionModePicker
 
                 switch connectionTab {
-                case .lan:
+                case .local:
                     ServerListView(browser: browser) { server in
                         selectedServer = server
                         navigationPath.append(Route.password)
                     }
-                case .wan:
+                case .code:
+                    PairingCodeView { host, port in
+                        navigationPath.append(Route.wanPassword(host: host, port: port))
+                    }
+                case .manual:
                     ManualConnectionView { host, port in
-                        navigationPath.append(Route.manualPassword(host: host, port: port))
+                        navigationPath.append(Route.wanPassword(host: host, port: port))
                     }
                 }
             }
@@ -40,7 +51,7 @@ struct ContentView: View {
                 switch route {
                 case .password:
                     passwordScreen(serverName: selectedServer?.name ?? "Mac")
-                case .manualPassword(let host, let port):
+                case .wanPassword(let host, let port):
                     wanPasswordScreen(host: host, port: port)
                 case .session:
                     RemoteSessionView(connection: connection)
@@ -72,27 +83,20 @@ struct ContentView: View {
 
     private var connectionModePicker: some View {
         Picker("Connection Mode", selection: $connectionTab) {
-            Label("Local WiFi", systemImage: "wifi").tag(ConnectionMode.lan)
-            Label("Internet", systemImage: "globe").tag(ConnectionMode.wan)
+            ForEach(ConnectionTab.allCases, id: \.self) { tab in
+                Text(tab.rawValue).tag(tab)
+            }
         }
         .pickerStyle(.segmented)
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .accessibilityLabel("Connection mode: \(connectionTab.rawValue)")
     }
 
     // MARK: - LAN Password Screen
 
     @ViewBuilder
     private func passwordScreen(serverName: String) -> some View {
-        switch connection.state {
-        case .waitingForApproval:
-            waitingView(serverName: serverName)
-        case .reconnecting(let attempt):
-            reconnectingView(attempt: attempt)
-        case .error(let message):
-            errorView(message: message)
-        default:
+        connectionStateView(serverName: serverName) {
             PasswordEntryView(serverName: serverName) { password in
                 guard let server = selectedServer else { return }
                 pendingPassword = password
@@ -105,14 +109,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private func wanPasswordScreen(host: String, port: UInt16) -> some View {
-        switch connection.state {
-        case .waitingForApproval:
-            waitingView(serverName: host)
-        case .reconnecting(let attempt):
-            reconnectingView(attempt: attempt)
-        case .error(let message):
-            errorView(message: message)
-        default:
+        connectionStateView(serverName: host) {
             PasswordEntryView(serverName: host) { password in
                 pendingPassword = password
                 connection.connect(host: host, port: port)
@@ -120,57 +117,50 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Status Views
+    // MARK: - Connection State Wrapper
 
-    private func waitingView(serverName: String) -> some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.5)
-            Text("Waiting for \(serverName) to approve...")
-                .font(.headline)
-            Text("Check your Mac for the approval dialog.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+    @ViewBuilder
+    private func connectionStateView<Content: View>(serverName: String, @ViewBuilder defaultContent: () -> Content) -> some View {
+        switch connection.state {
+        case .waitingForApproval:
+            statusView(icon: nil, title: "Waiting for \(serverName) to approve...",
+                       subtitle: "Check your Mac for the approval dialog.", showProgress: true)
+                .navigationTitle("Connecting")
+        case .reconnecting(let attempt):
+            VStack(spacing: 16) {
+                ProgressView().scaleEffect(1.5)
+                Text("Reconnecting...").font(.headline)
+                Text("Attempt \(attempt) of \(MyRemoteConstants.maxReconnectRetries)")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Button("Cancel") { connection.disconnect() }.buttonStyle(.bordered)
+            }
+            .padding()
+            .navigationTitle("Reconnecting")
+        case .error(let message):
+            statusView(icon: "exclamationmark.triangle", title: message, iconColor: .red)
+                .navigationTitle("Error")
+        default:
+            defaultContent()
         }
-        .padding()
-        .navigationTitle("Connecting")
     }
 
-    private func reconnectingView(attempt: Int) -> some View {
+    private func statusView(icon: String?, title: String, subtitle: String? = nil,
+                            iconColor: Color = .secondary, showProgress: Bool = false) -> some View {
         VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.5)
-            Text("Reconnecting...")
-                .font(.headline)
-            Text("Attempt \(attempt) of \(MyRemoteConstants.maxReconnectRetries)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Button("Cancel") {
-                connection.disconnect()
+            if showProgress {
+                ProgressView().scaleEffect(1.5)
             }
-            .buttonStyle(.bordered)
+            if let icon {
+                Image(systemName: icon).font(.system(size: 48)).foregroundStyle(iconColor)
+            }
+            Text(title).font(.headline).multilineTextAlignment(.center)
+            if let subtitle {
+                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+            }
+            if case .error = connection.state {
+                Button("Try Again") { connection.disconnect() }.buttonStyle(.borderedProminent)
+            }
         }
         .padding()
-        .navigationTitle("Reconnecting")
-    }
-
-    private func errorView(message: String) -> some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 48))
-                .foregroundStyle(.red)
-
-            Text(message)
-                .font(.headline)
-                .multilineTextAlignment(.center)
-
-            Button("Try Again") {
-                connection.disconnect()
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .padding()
-        .navigationTitle("Error")
     }
 }

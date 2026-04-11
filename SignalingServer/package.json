@@ -1,0 +1,12 @@
+{
+  "name": "myremote-signaling-server",
+  "version": "1.0.0",
+  "description": "Lightweight signaling server for MyRemote pairing codes. Maps 6-char codes to Mac public IPs. No traffic relay — signaling only.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

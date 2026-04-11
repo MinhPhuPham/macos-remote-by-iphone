@@ -41,6 +41,25 @@ struct MenuBarView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            if server.isRunning && server.connectedClient == nil {
+                Divider().padding(.vertical, 2)
+                HStack(spacing: 4) {
+                    Image(systemName: "link.circle")
+                        .foregroundStyle(.blue)
+                    Text("Pairing Code:")
+                        .font(.caption)
+                    Text(server.pairingManager.formattedCode)
+                        .font(.system(.caption, design: .monospaced).bold())
+                        .textSelection(.enabled)
+                }
+
+                if !server.pairingManager.isRegistered {
+                    Text("Signaling server offline — use Manual IP")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

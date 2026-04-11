@@ -22,9 +22,9 @@ final class ServerManager: ObservableObject {
 
         var bitrate: Int {
             switch self {
-            case .low:    return MyRemoteConstants.lowBitrate
-            case .medium: return MyRemoteConstants.defaultBitrate
-            case .high:   return MyRemoteConstants.highBitrate
+            case .low:    return MyRemoteConstants.LAN.lowBitrate
+            case .medium: return MyRemoteConstants.LAN.defaultBitrate
+            case .high:   return MyRemoteConstants.LAN.highBitrate
             }
         }
     }
@@ -39,6 +39,7 @@ final class ServerManager: ObservableObject {
 
     let authManager: AuthManager
     let trustedDeviceStore: TrustedDeviceStore
+    let pairingManager: PairingCodeManager
     private let advertiser: BonjourAdvertiser
     private let mouseInjector = MouseInjector()
     private let keyboardInjector = KeyboardInjector()
@@ -53,6 +54,7 @@ final class ServerManager: ObservableObject {
         self.trustedDeviceStore = store
         self.authManager = AuthManager(trustedDeviceStore: store)
         self.advertiser = BonjourAdvertiser()
+        self.pairingManager = PairingCodeManager()
 
         advertiser.onNewConnection = { [weak self] nwConnection in
             self?.handleIncomingConnection(nwConnection)
@@ -71,6 +73,7 @@ final class ServerManager: ObservableObject {
             }
         }
         advertiser.start(tlsIdentity: nil)
+        pairingManager.generateAndRegister()
         isRunning = true
         statusMessage = "Waiting for connections..."
     }
@@ -79,6 +82,7 @@ final class ServerManager: ObservableObject {
         connectedClient?.disconnect()
         connectedClient = nil
         advertiser.stop()
+        pairingManager.unregister()
         authManager.endSession()
         isRunning = false
         statusMessage = "Server stopped"
