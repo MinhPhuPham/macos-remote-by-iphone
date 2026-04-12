@@ -1,19 +1,20 @@
 import Foundation
 import VideoToolbox
 import CoreMedia
+import os
+
+private let logger = Logger(subsystem: "com.myremote.server", category: "VideoEncoder")
 
 /// H.264 hardware encoder using VideoToolbox.
 /// Encodes CVPixelBuffer frames and outputs NAL units ready for network transmission.
 final class VideoEncoder {
 
-    /// Called with encoded H.264 data (NAL unit) for each frame.
     var onEncodedFrame: ((Data, Bool) -> Void)?  // (data, isKeyframe)
-
-    /// Called once when SPS/PPS parameters are extracted from the first keyframe.
-    var onVideoConfig: ((Data, Data) -> Void)?  // (sps, pps)
+    var onVideoConfig: ((Data, Data) -> Void)?   // (sps, pps)
 
     private var session: VTCompressionSession?
     private var hasEmittedConfig = false
+    private var pendingForceKeyframe = false
 
     private let width: Int32
     private let height: Int32
@@ -48,31 +49,20 @@ final class VideoEncoder {
 
         self.session = session
 
-        // Real-time encoding for low latency.
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_RealTime, value: kCFBooleanTrue)
-
-        // H.264 Main profile.
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ProfileLevel,
                              value: kVTProfileLevel_H264_Main_AutoLevel)
-
-        // Bitrate.
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate,
                              value: bitrate as CFNumber)
 
-        // Data rate limits: [bytes per second, duration in seconds].
         let dataRateLimit = [Double(bitrate) / 8.0, 1.0] as CFArray
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_DataRateLimits,
                              value: dataRateLimit)
 
-        // Keyframe interval.
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval,
                              value: MyRemoteConstants.keyFrameInterval as CFNumber)
-
-        // Expected frame rate.
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ExpectedFrameRate,
                              value: frameRate as CFNumber)
-
-        // Allow frame reordering = false for lower latency.
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AllowFrameReordering,
                              value: kCFBooleanFalse)
 
@@ -86,6 +76,7 @@ final class VideoEncoder {
         }
         session = nil
         hasEmittedConfig = false
+        pendingForceKeyframe = false
     }
 
     // MARK: - Encoding
@@ -93,12 +84,22 @@ final class VideoEncoder {
     func encode(pixelBuffer: CVPixelBuffer, presentationTime: CMTime) {
         guard let session = session else { return }
 
+        // Build frame properties — include force-keyframe if pending.
+        var frameProperties: CFDictionary?
+        if pendingForceKeyframe {
+            let props: [CFString: Any] = [
+                kVTEncodeFrameOptionKey_ForceKeyFrame: true
+            ]
+            frameProperties = props as CFDictionary
+            pendingForceKeyframe = false
+        }
+
         let status = VTCompressionSessionEncodeFrame(
             session,
             imageBuffer: pixelBuffer,
             presentationTimeStamp: presentationTime,
             duration: .invalid,
-            frameProperties: nil,
+            frameProperties: frameProperties,
             infoFlagsOut: nil
         ) { [weak self] status, _, sampleBuffer in
             guard status == noErr, let sampleBuffer = sampleBuffer else { return }
@@ -106,20 +107,13 @@ final class VideoEncoder {
         }
 
         if status != noErr {
-            print("[VideoEncoder] Encode error: \(status)")
+            logger.warning("Encode error: \(status)")
         }
     }
 
-    /// Force an IDR (keyframe) on the next encode.
+    /// Force an IDR (keyframe) on the next encode call.
     func forceKeyframe() {
-        guard let session = session else { return }
-        let properties: [String: Any] = [
-            kVTEncodeFrameOptionKey_ForceKeyFrame as String: true
-        ]
-        // The next encode call will pick up this property.
-        // For immediate effect, we flush pending frames.
-        VTCompressionSessionCompleteFrames(session, untilPresentationTimeStamp: .invalid)
-        _ = properties // Used via encode frame properties in next call.
+        pendingForceKeyframe = true
     }
 
     // MARK: - Bitrate / Frame Rate Updates
@@ -139,17 +133,14 @@ final class VideoEncoder {
     // MARK: - Processing
 
     private func processSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
-        // Check if this is a keyframe.
         let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[CFString: Any]]
         let isKeyframe = attachments?.first?[kCMSampleAttachmentKey_NotSync] as? Bool != true
 
-        // Extract SPS/PPS from the first keyframe.
         if isKeyframe && !hasEmittedConfig {
             extractVideoConfig(from: sampleBuffer)
             hasEmittedConfig = true
         }
 
-        // Extract NAL unit data.
         guard let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
         var totalLength = 0
         var dataPointer: UnsafeMutablePointer<Int8>?
@@ -164,19 +155,16 @@ final class VideoEncoder {
     private func extractVideoConfig(from sampleBuffer: CMSampleBuffer) {
         guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer) else { return }
 
-        // SPS
         var spsSize = 0
-        var spsCount = 0
         var spsPointer: UnsafePointer<UInt8>?
         CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
             formatDesc, parameterSetIndex: 0,
             parameterSetPointerOut: &spsPointer,
             parameterSetSizeOut: &spsSize,
-            parameterSetCountOut: &spsCount,
+            parameterSetCountOut: nil,
             nalUnitHeaderLengthOut: nil
         )
 
-        // PPS
         var ppsSize = 0
         var ppsPointer: UnsafePointer<UInt8>?
         CMVideoFormatDescriptionGetH264ParameterSetAtIndex(

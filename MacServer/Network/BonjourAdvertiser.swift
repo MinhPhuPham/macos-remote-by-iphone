@@ -1,5 +1,8 @@
 import Foundation
 import Network
+import os
+
+private let logger = Logger(subsystem: "com.myremote.server", category: "Bonjour")
 
 /// Advertises the MyRemote server via Bonjour and accepts incoming TLS connections.
 final class BonjourAdvertiser: ObservableObject {
@@ -22,7 +25,10 @@ final class BonjourAdvertiser: ObservableObject {
     func start(tlsIdentity: SecIdentity?) {
         do {
             let parameters = createParameters(identity: tlsIdentity)
-            let nwPort = NWEndpoint.Port(rawValue: port)!
+            guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+                errorMessage = "Invalid port: \(port)"
+                return
+            }
             listener = try NWListener(using: parameters, on: nwPort)
         } catch {
             errorMessage = "Failed to create listener: \(error.localizedDescription)"
@@ -70,8 +76,7 @@ final class BonjourAdvertiser: ObservableObject {
     private func createParameters(identity: SecIdentity?) -> NWParameters {
         let tlsOptions = NWProtocolTLS.Options()
 
-        if let identity = identity {
-            let secIdentity = sec_identity_create(identity)!
+        if let identity = identity, let secIdentity = sec_identity_create(identity) {
             sec_protocol_options_set_local_identity(
                 tlsOptions.securityProtocolOptions,
                 secIdentity

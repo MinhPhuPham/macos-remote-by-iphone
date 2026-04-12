@@ -10,12 +10,13 @@ struct VirtualKeyboardView: UIViewRepresentable {
     func makeUIView(context: Context) -> KeyCaptureTextField {
         let field = KeyCaptureTextField()
         field.keyPressHandler = onKeyPress
-        field.alpha = 0.01 // Nearly invisible but still functional.
+        field.alpha = 0.01
         field.autocorrectionType = .no
         field.autocapitalizationType = .none
         field.spellCheckingType = .no
         field.smartQuotesType = .no
         field.smartDashesType = .no
+        field.accessibilityLabel = "Text input for remote keyboard"
         return field
     }
 
@@ -26,6 +27,10 @@ struct VirtualKeyboardView: UIViewRepresentable {
             uiView.resignFirstResponder()
         }
     }
+
+    static func dismantleUIView(_ uiView: KeyCaptureTextField, coordinator: ()) {
+        uiView.resignFirstResponder()
+    }
 }
 
 /// Custom UITextField that intercepts every keystroke for forwarding to the server.
@@ -33,22 +38,44 @@ final class KeyCaptureTextField: UITextField, UITextFieldDelegate {
 
     var keyPressHandler: ((String, UInt16, Bool) -> Void)?
 
+    // Cached key commands — computed once, not on every UIKit query.
+    private lazy var cachedKeyCommands: [UIKeyCommand] = {
+        var commands: [UIKeyCommand] = []
+
+        let arrowKeys: [(UIKeyCommand.Input, String)] = [
+            (UIKeyCommand.inputUpArrow, "up"),
+            (UIKeyCommand.inputDownArrow, "down"),
+            (UIKeyCommand.inputLeftArrow, "left"),
+            (UIKeyCommand.inputRightArrow, "right"),
+        ]
+        for (input, name) in arrowKeys {
+            let cmd = UIKeyCommand(input: input, modifierFlags: [], action: #selector(handleArrowKey))
+            cmd.title = name
+            commands.append(cmd)
+        }
+
+        commands.append(UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(handleEscape)))
+        commands.append(UIKeyCommand(input: "\t", modifierFlags: [], action: #selector(handleTab)))
+
+        return commands
+    }()
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         delegate = self
-        text = " " // Keep a space so delete key works.
+        text = " "
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         delegate = self
+        text = " "
     }
 
     // MARK: - UITextFieldDelegate
 
     func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
         if string.isEmpty {
-            // Delete key pressed.
             if let keyCode = KeyCodeMap.specialKeyToKeyCode["delete"] {
                 keyPressHandler?("delete", keyCode, true)
             }
@@ -61,7 +88,6 @@ final class KeyCaptureTextField: UITextField, UITextFieldDelegate {
             }
         }
 
-        // Reset text to a space to keep delete working.
         DispatchQueue.main.async {
             textField.text = " "
         }
@@ -77,33 +103,7 @@ final class KeyCaptureTextField: UITextField, UITextFieldDelegate {
 
     // MARK: - Hardware Keyboard Support
 
-    override var keyCommands: [UIKeyCommand]? {
-        var commands: [UIKeyCommand] = []
-
-        // Arrow keys.
-        let arrowKeys: [(UIKeyCommand.Input, String)] = [
-            (UIKeyCommand.inputUpArrow, "up"),
-            (UIKeyCommand.inputDownArrow, "down"),
-            (UIKeyCommand.inputLeftArrow, "left"),
-            (UIKeyCommand.inputRightArrow, "right"),
-        ]
-
-        for (input, name) in arrowKeys {
-            let cmd = UIKeyCommand(input: input, modifierFlags: [], action: #selector(handleArrowKey))
-            cmd.title = name
-            commands.append(cmd)
-        }
-
-        // Escape.
-        let esc = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(handleEscape))
-        commands.append(esc)
-
-        // Tab.
-        let tab = UIKeyCommand(input: "\t", modifierFlags: [], action: #selector(handleTab))
-        commands.append(tab)
-
-        return commands
-    }
+    override var keyCommands: [UIKeyCommand]? { cachedKeyCommands }
 
     @objc private func handleArrowKey(_ command: UIKeyCommand) {
         guard let input = command.input else { return }

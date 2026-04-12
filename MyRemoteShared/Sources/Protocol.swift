@@ -15,6 +15,9 @@ public enum MessageType: UInt8, Sendable {
     case disconnect      = 0x09
     case keyframeRequest = 0x0A
     case configUpdate    = 0x0B
+    case ping            = 0x0C  // RTT measurement: client → server
+    case pong            = 0x0D  // RTT measurement: server → client
+    case qualityUpdate   = 0x0E  // Client → Server: request bitrate/fps change
 }
 
 // MARK: - Protocol Frame
@@ -40,17 +43,31 @@ public struct ProtocolFrame: Sendable {
     }
 
     /// Attempt to decode one frame from the front of `data`.
-    /// Returns the frame and the total number of bytes consumed, or nil if not enough data.
-    public static func decode(from data: Data) -> (ProtocolFrame, Int)? {
+    /// Returns the frame and total bytes consumed, or nil if not enough data.
+    /// If the message type is unknown, returns nil for the frame but still
+    /// reports the consumed byte count to prevent infinite loops.
+    public static func decode(from data: Data) -> (frame: ProtocolFrame?, consumed: Int)? {
         guard data.count >= 5 else { return nil }
         let typeByte = data[data.startIndex]
-        let lengthData = data.subdata(in: (data.startIndex + 1)..<(data.startIndex + 5))
-        let length = lengthData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
-        let totalLength = 5 + Int(length)
-        guard data.count >= totalLength,
-              let type = MessageType(rawValue: typeByte) else { return nil }
-        let payload = data.subdata(in: (data.startIndex + 5)..<(data.startIndex + totalLength))
-        return (ProtocolFrame(type: type, payload: payload), totalLength)
+        let lengthSlice = data[(data.startIndex + 1)..<(data.startIndex + 5)]
+        let length = lengthSlice.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+        let payloadLength = Int(length)
+        let totalLength = 5 + payloadLength
+
+        // Reject oversized frames to prevent memory exhaustion (DoS protection).
+        guard payloadLength <= MyRemoteConstants.maxFramePayloadSize else {
+            return (frame: nil, consumed: totalLength)
+        }
+
+        guard data.count >= totalLength else { return nil }
+
+        // Unknown type: skip the frame but still consume the bytes.
+        guard let type = MessageType(rawValue: typeByte) else {
+            return (frame: nil, consumed: totalLength)
+        }
+
+        let payload = data[(data.startIndex + 5)..<(data.startIndex + totalLength)]
+        return (frame: ProtocolFrame(type: type, payload: Data(payload)), consumed: totalLength)
     }
 }
 
@@ -99,14 +116,12 @@ public struct MouseEvent: Codable, Sendable {
     public let type: MouseEventType
     public let x: Double
     public let y: Double
-    public let button: String?
 
-    public init(sessionToken: String, type: MouseEventType, x: Double, y: Double, button: String? = nil) {
+    public init(sessionToken: String, type: MouseEventType, x: Double, y: Double) {
         self.sessionToken = sessionToken
         self.type = type
         self.x = x
         self.y = y
-        self.button = button
     }
 }
 
@@ -148,5 +163,31 @@ public struct ConfigUpdate: Codable, Sendable {
         self.screenWidth = screenWidth
         self.screenHeight = screenHeight
         self.fps = fps
+    }
+}
+
+// MARK: - RTT & Adaptive Quality Payloads
+
+/// Ping payload for RTT measurement.
+public struct PingPayload: Codable, Sendable {
+    public let timestamp: UInt64  // milliseconds since epoch
+
+    public init() {
+        self.timestamp = UInt64(Date().timeIntervalSince1970 * 1000)
+    }
+
+    public init(timestamp: UInt64) {
+        self.timestamp = timestamp
+    }
+}
+
+/// Client → Server: request quality change based on network conditions.
+public struct QualityUpdate: Codable, Sendable {
+    public let requestedBitrate: Int
+    public let requestedFPS: Int
+
+    public init(requestedBitrate: Int, requestedFPS: Int) {
+        self.requestedBitrate = requestedBitrate
+        self.requestedFPS = requestedFPS
     }
 }

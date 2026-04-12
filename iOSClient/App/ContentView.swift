@@ -1,6 +1,20 @@
 import SwiftUI
 
-/// Root view: NavigationStack driving the server discovery → auth → remote session flow.
+/// Type-safe navigation routes.
+enum Route: Hashable {
+    case password
+    case wanPassword(host: String, port: UInt16)
+    case session
+}
+
+/// Connection tab selection.
+enum ConnectionTab: String, CaseIterable {
+    case local = "Local WiFi"
+    case code = "Pairing Code"
+    case manual = "Manual IP"
+}
+
+/// Root view: NavigationStack with LAN/WAN connection modes.
 struct ContentView: View {
 
     @StateObject private var browser = ServerBrowser()
@@ -8,30 +22,53 @@ struct ContentView: View {
 
     @State private var selectedServer: DiscoveredServer?
     @State private var navigationPath = NavigationPath()
+    @State private var pendingPassword: String?
+    @State private var connectionTab: ConnectionTab = .local
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            ServerListView(browser: browser) { server in
-                selectedServer = server
-                navigationPath.append("password")
+            VStack(spacing: 0) {
+                connectionModePicker
+
+                switch connectionTab {
+                case .local:
+                    ServerListView(browser: browser) { server in
+                        selectedServer = server
+                        navigationPath.append(Route.password)
+                    }
+                case .code:
+                    PairingCodeView { host, port in
+                        navigationPath.append(Route.wanPassword(host: host, port: port))
+                    }
+                case .manual:
+                    ManualConnectionView { host, port in
+                        navigationPath.append(Route.wanPassword(host: host, port: port))
+                    }
+                }
             }
-            .navigationDestination(for: String.self) { destination in
-                switch destination {
-                case "password":
-                    passwordScreen
-                case "session":
+            .navigationTitle("MyRemote")
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .password:
+                    passwordScreen(serverName: selectedServer?.name ?? "Mac")
+                case .wanPassword(let host, let port):
+                    wanPasswordScreen(host: host, port: port)
+                case .session:
                     RemoteSessionView(connection: connection)
                         .navigationBarBackButtonHidden()
-                default:
-                    EmptyView()
                 }
             }
         }
         .onChange(of: connection.state) { _, newState in
             switch newState {
+            case .authenticating:
+                if let password = pendingPassword {
+                    connection.sendAuthRequest(password: password)
+                    pendingPassword = nil
+                }
             case .connected:
                 navigationPath = NavigationPath()
-                navigationPath.append("session")
+                navigationPath.append(Route.session)
             case .disconnected:
                 if !navigationPath.isEmpty {
                     navigationPath = NavigationPath()
@@ -42,59 +79,88 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Password Screen
+    // MARK: - Connection Mode Picker
+
+    private var connectionModePicker: some View {
+        Picker("Connection Mode", selection: $connectionTab) {
+            ForEach(ConnectionTab.allCases, id: \.self) { tab in
+                Text(tab.rawValue).tag(tab)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - LAN Password Screen
 
     @ViewBuilder
-    private var passwordScreen: some View {
-        if let server = selectedServer {
-            switch connection.state {
-            case .waitingForApproval:
-                waitingForApprovalView(serverName: server.name)
-            case .error(let message):
-                errorView(message: message, server: server)
-            default:
-                PasswordEntryView(serverName: server.name) { password in
-                    connection.connect(to: server.endpoint)
-                    // Delay slightly to allow connection to establish.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        connection.sendAuthRequest(password: password)
-                    }
-                }
+    private func passwordScreen(serverName: String) -> some View {
+        connectionStateView(serverName: serverName) {
+            PasswordEntryView(serverName: serverName) { password in
+                guard let server = selectedServer else { return }
+                pendingPassword = password
+                connection.connect(to: server.endpoint)
             }
         }
     }
 
-    private func waitingForApprovalView(serverName: String) -> some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.5)
-            Text("Waiting for \(serverName) to approve...")
-                .font(.headline)
-            Text("Check your Mac for the approval dialog.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+    // MARK: - WAN Password Screen
+
+    @ViewBuilder
+    private func wanPasswordScreen(host: String, port: UInt16) -> some View {
+        connectionStateView(serverName: host) {
+            PasswordEntryView(serverName: host) { password in
+                pendingPassword = password
+                connection.connect(host: host, port: port)
+            }
         }
-        .padding()
-        .navigationTitle("Connecting")
     }
 
-    private func errorView(message: String, server: DiscoveredServer) -> some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 48))
-                .foregroundStyle(.red)
+    // MARK: - Connection State Wrapper
 
-            Text(message)
-                .font(.headline)
-                .multilineTextAlignment(.center)
-
-            Button("Try Again") {
-                connection.disconnect()
-                // Stay on password screen for retry.
+    @ViewBuilder
+    private func connectionStateView<Content: View>(serverName: String, @ViewBuilder defaultContent: () -> Content) -> some View {
+        switch connection.state {
+        case .waitingForApproval:
+            statusView(icon: nil, title: "Waiting for \(serverName) to approve...",
+                       subtitle: "Check your Mac for the approval dialog.", showProgress: true)
+                .navigationTitle("Connecting")
+        case .reconnecting(let attempt):
+            VStack(spacing: 16) {
+                ProgressView().scaleEffect(1.5)
+                Text("Reconnecting...").font(.headline)
+                Text("Attempt \(attempt) of \(MyRemoteConstants.maxReconnectRetries)")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Button("Cancel") { connection.disconnect() }.buttonStyle(.bordered)
             }
-            .buttonStyle(.borderedProminent)
+            .padding()
+            .navigationTitle("Reconnecting")
+        case .error(let message):
+            statusView(icon: "exclamationmark.triangle", title: message, iconColor: .red)
+                .navigationTitle("Error")
+        default:
+            defaultContent()
+        }
+    }
+
+    private func statusView(icon: String?, title: String, subtitle: String? = nil,
+                            iconColor: Color = .secondary, showProgress: Bool = false) -> some View {
+        VStack(spacing: 16) {
+            if showProgress {
+                ProgressView().scaleEffect(1.5)
+            }
+            if let icon {
+                Image(systemName: icon).font(.system(size: 48)).foregroundStyle(iconColor)
+            }
+            Text(title).font(.headline).multilineTextAlignment(.center)
+            if let subtitle {
+                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+            }
+            if case .error = connection.state {
+                Button("Try Again") { connection.disconnect() }.buttonStyle(.borderedProminent)
+            }
         }
         .padding()
-        .navigationTitle("Error")
     }
 }

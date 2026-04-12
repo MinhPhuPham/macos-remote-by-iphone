@@ -31,6 +31,7 @@ struct MenuBarView: View {
                 Circle()
                     .fill(statusColor)
                     .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
                 Text(server.statusMessage)
                     .font(.subheadline)
             }
@@ -40,9 +41,30 @@ struct MenuBarView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            if server.isRunning && server.connectedClient == nil {
+                Divider().padding(.vertical, 2)
+                HStack(spacing: 4) {
+                    Image(systemName: "link.circle")
+                        .foregroundStyle(.blue)
+                    Text("Pairing Code:")
+                        .font(.caption)
+                    Text(server.pairingManager.formattedCode)
+                        .font(.system(.caption, design: .monospaced).bold())
+                        .textSelection(.enabled)
+                }
+
+                if !server.pairingManager.isRegistered {
+                    Text("Signaling server offline — use Manual IP")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Server status: \(server.statusMessage)")
     }
 
     private var controlsSection: some View {
