@@ -13,6 +13,8 @@ final class VideoEncoder {
     private var session: VTCompressionSession?
     private var hasEmittedConfig = false
     private var pendingForceKeyframe = false
+    private var hasLoggedFirstEncode = false
+    private var encodedFrameCount: Int = 0
 
     private let width: Int32
     private let height: Int32
@@ -47,27 +49,49 @@ final class VideoEncoder {
 
         self.session = session
 
+        // Real-time encoding with hardware acceleration.
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_RealTime, value: kCFBooleanTrue)
+
+        // High profile for better compression efficiency at the same bitrate.
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ProfileLevel,
-                             value: kVTProfileLevel_H264_Main_AutoLevel)
+                             value: kVTProfileLevel_H264_High_AutoLevel)
+
+        // Average bitrate — the encoder targets this over time.
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate,
                              value: bitrate as CFNumber)
 
-        let dataRateLimit = [Double(bitrate) / 8.0, 1.0] as CFArray
+        // Data rate limit: allow 2× burst over 1 second for sharp transitions
+        // (e.g., opening a new window). Without burst headroom, quality drops
+        // on sudden visual changes.
+        let dataRateLimit = [Double(bitrate) * 2.0 / 8.0, 1.0] as CFArray
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_DataRateLimits,
                              value: dataRateLimit)
 
+        // Keyframe every 2 seconds (at 30fps = every 60 frames).
+        // More frequent keyframes = faster recovery from corruption,
+        // but slightly larger stream.
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval,
-                             value: MyRemoteConstants.keyFrameInterval as CFNumber)
+                             value: (frameRate * 2) as CFNumber)
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration,
+                             value: 2.0 as CFNumber)
+
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ExpectedFrameRate,
                              value: frameRate as CFNumber)
+
+        // No B-frames — reduces latency (no frame reordering needed).
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AllowFrameReordering,
                              value: kCFBooleanFalse)
 
+        // Prioritize low latency over maximum compression.
+        VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AllowTemporalCompression,
+                             value: kCFBooleanTrue)
+
         VTCompressionSessionPrepareToEncodeFrames(session)
+        Log.encoder.info("Encoder started: \(self.width)x\(self.height) bitrate=\(bitrate) fps=\(frameRate)")
     }
 
     func stop() {
+        Log.encoder.info("Encoder stopped")
         if let session = session {
             VTCompressionSessionCompleteFrames(session, untilPresentationTimeStamp: .invalid)
             VTCompressionSessionInvalidate(session)
@@ -75,12 +99,19 @@ final class VideoEncoder {
         session = nil
         hasEmittedConfig = false
         pendingForceKeyframe = false
+        hasLoggedFirstEncode = false
+        encodedFrameCount = 0
     }
 
     // MARK: - Encoding
 
     func encode(pixelBuffer: CVPixelBuffer, presentationTime: CMTime) {
         guard let session = session else { return }
+
+        if !hasLoggedFirstEncode {
+            Log.encoder.info("First frame encoding")
+            hasLoggedFirstEncode = true
+        }
 
         // Build frame properties — include force-keyframe if pending.
         var frameProperties: CFDictionary?
@@ -111,6 +142,7 @@ final class VideoEncoder {
 
     /// Force an IDR (keyframe) on the next encode call.
     func forceKeyframe() {
+        Log.encoder.info("Keyframe forced")
         pendingForceKeyframe = true
     }
 
@@ -118,12 +150,14 @@ final class VideoEncoder {
 
     func setBitrate(_ bitrate: Int) {
         guard let session = session else { return }
+        Log.encoder.info("Bitrate updated to \(bitrate)")
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_AverageBitRate,
                              value: bitrate as CFNumber)
     }
 
     func setFrameRate(_ fps: Int) {
         guard let session = session else { return }
+        Log.encoder.info("Frame rate updated to \(fps)")
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_ExpectedFrameRate,
                              value: fps as CFNumber)
     }
@@ -135,6 +169,7 @@ final class VideoEncoder {
         let isKeyframe = attachments?.first?[kCMSampleAttachmentKey_NotSync] as? Bool != true
 
         if isKeyframe && !hasEmittedConfig {
+            Log.encoder.info("Emitting video config (SPS/PPS)")
             extractVideoConfig(from: sampleBuffer)
             hasEmittedConfig = true
         }
@@ -147,6 +182,12 @@ final class VideoEncoder {
 
         guard let pointer = dataPointer else { return }
         let data = Data(bytes: pointer, count: totalLength)
+
+        encodedFrameCount += 1
+        if encodedFrameCount % 30 == 0 {
+            Log.encoder.debug("Encoded frame #\(self.encodedFrameCount): \(totalLength) bytes, keyframe=\(isKeyframe)")
+        }
+
         onEncodedFrame?(data, isKeyframe)
     }
 

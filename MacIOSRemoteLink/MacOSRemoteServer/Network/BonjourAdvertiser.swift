@@ -97,6 +97,7 @@ final class BonjourAdvertiser: ObservableObject {
     }
 
     func stop() {
+        Log.bonjour.info("Bonjour advertiser stopped")
         listener?.cancel()
         listener = nil
         isListening = false

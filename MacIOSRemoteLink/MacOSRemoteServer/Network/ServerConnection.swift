@@ -21,6 +21,7 @@ final class ServerConnection: ObservableObject {
     private var heartbeatTimer: DispatchSourceTimer?
     private var authTimeoutTimer: DispatchSourceTimer?
     private var lastActivityDate = Date()
+    private var hasLoggedFirstReceive = false
 
     init(connection: NWConnection) {
         self.connection = connection
@@ -32,16 +33,25 @@ final class ServerConnection: ObservableObject {
     // MARK: - Lifecycle
 
     func start() {
+        Log.connection.info("ServerConnection starting on \(self.connection.endpoint.debugDescription)")
         connection.stateUpdateHandler = { [weak self] state in
             guard let self = self else { return }
             DispatchQueue.main.async {
                 switch state {
                 case .ready:
+                    Log.connection.info("Connection ready — starting receive loop")
                     self.isConnected = true
                     self.startReceiving()
                     self.startHeartbeat()
                     self.startAuthTimeout()
-                case .failed, .cancelled:
+                case .failed(let error):
+                    Log.connection.warning("Connection failed: \(error.localizedDescription)")
+                    self.isConnected = false
+                    self.stopHeartbeat()
+                    self.cancelAuthTimeout()
+                    self.onDisconnected?(self)
+                case .cancelled:
+                    Log.connection.info("Connection cancelled")
                     self.isConnected = false
                     self.stopHeartbeat()
                     self.cancelAuthTimeout()
@@ -55,6 +65,7 @@ final class ServerConnection: ObservableObject {
     }
 
     func disconnect() {
+        Log.connection.info("ServerConnection disconnecting from \(self.remoteAddress)")
         send(frame: ProtocolFrame(type: .disconnect))
         stopHeartbeat()
         cancelAuthTimeout()
@@ -92,10 +103,15 @@ final class ServerConnection: ObservableObject {
     // MARK: - Receiving
 
     private func startReceiving() {
+        if !hasLoggedFirstReceive {
+            Log.connection.info("Receive loop started for \(self.remoteAddress)")
+            hasLoggedFirstReceive = true
+        }
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
             guard let self = self else { return }
 
             if let data = data, !data.isEmpty {
+                Log.connection.debug("Received \(data.count) bytes from \(self.remoteAddress)")
                 guard self.codec.append(data) else {
                     Log.connection.warning("Buffer overflow — disconnecting client \(self.remoteAddress)")
                     self.disconnect()
@@ -104,6 +120,7 @@ final class ServerConnection: ObservableObject {
                 self.lastActivityDate = Date()
                 let frames = self.codec.decodeAvailableFrames()
                 for frame in frames {
+                    Log.connection.debug("Frame decoded: type=\(frame.type.rawValue)")
                     self.onFrameReceived?(frame, self)
                 }
             }

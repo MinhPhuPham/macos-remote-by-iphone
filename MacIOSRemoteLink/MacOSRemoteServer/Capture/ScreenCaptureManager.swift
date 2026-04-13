@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import CoreMedia
 import Foundation
+import os
 import ScreenCaptureKit
 
 /// Manages screen capture via ScreenCaptureKit.
@@ -17,6 +18,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
 
     private(set) var displayWidth: Int = 0
     private(set) var displayHeight: Int = 0
+    private var hasLoggedFirstPixelBuffer = false
 
     // MARK: - Permissions
 
@@ -42,6 +44,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
 
         displayWidth = display.width
         displayHeight = display.height
+        Log.capture.info("Starting capture: scale=\(scaleFactor) fps=\(frameRate) display=\(display.width)x\(display.height)")
 
         let config = SCStreamConfiguration()
         config.width = Int(CGFloat(display.width) * scaleFactor)
@@ -49,6 +52,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(frameRate))
         config.pixelFormat = kCVPixelFormatType_32BGRA
         config.showsCursor = true
+        config.queueDepth = 2  // Small buffer: low latency but room for encode spikes.
 
         let filter = SCContentFilter(display: display, excludingWindows: [])
 
@@ -61,8 +65,10 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
     }
 
     func stopCapture() async {
+        Log.capture.info("Screen capture stopped")
         try? await stream?.stopCapture()
         stream = nil
+        hasLoggedFirstPixelBuffer = false
         await MainActor.run { isCapturing = false }
     }
 
@@ -90,6 +96,13 @@ extension ScreenCaptureManager: SCStreamOutput {
         guard type == .screen,
               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
+        if !hasLoggedFirstPixelBuffer {
+            let w = CVPixelBufferGetWidth(pixelBuffer)
+            let h = CVPixelBufferGetHeight(pixelBuffer)
+            Log.capture.info("First pixel buffer received: \(w)x\(h)")
+            hasLoggedFirstPixelBuffer = true
+        }
+
         let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         onPixelBuffer?(pixelBuffer, timestamp)
     }
@@ -100,6 +113,7 @@ extension ScreenCaptureManager: SCStreamOutput {
 extension ScreenCaptureManager: SCStreamDelegate {
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
+        Log.capture.error("Capture stream stopped with error: \(error.localizedDescription)")
         DispatchQueue.main.async { [weak self] in
             self?.isCapturing = false
             self?.captureError = "Capture stopped: \(error.localizedDescription)"

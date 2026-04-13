@@ -8,13 +8,14 @@ enum Route: Hashable {
 }
 
 /// Connection tab selection.
-enum ConnectionTab: String, CaseIterable {
-    case local = "Local WiFi"
-    case code = "Pairing Code"
-    case manual = "Manual IP"
+enum ConnectionTab: String, CaseIterable, Identifiable {
+    case local = "Same WiFi"
+    case remote = "Remote IP"
+
+    var id: String { rawValue }
 }
 
-/// Root view: NavigationStack with LAN/WAN connection modes.
+/// Root view: NavigationStack with Local WiFi / Remote IP connection modes.
 struct ContentView: View {
 
     @StateObject private var browser = ServerBrowser()
@@ -36,11 +37,7 @@ struct ContentView: View {
                         selectedServer = server
                         navigationPath.append(Route.password)
                     }
-                case .code:
-                    PairingCodeView { host, port in
-                        navigationPath.append(Route.wanPassword(host: host, port: port))
-                    }
-                case .manual:
+                case .remote:
                     ManualConnectionView { host, port in
                         navigationPath.append(Route.wanPassword(host: host, port: port))
                     }
@@ -83,7 +80,7 @@ struct ContentView: View {
 
     private var connectionModePicker: some View {
         Picker("Connection Mode", selection: $connectionTab) {
-            ForEach(ConnectionTab.allCases, id: \.self) { tab in
+            ForEach(ConnectionTab.allCases) { tab in
                 Text(tab.rawValue).tag(tab)
             }
         }

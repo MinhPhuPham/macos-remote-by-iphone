@@ -46,28 +46,30 @@ public enum MyRemoteConstants {
 
     // MARK: - Network Mode Presets
 
-    /// LAN-optimized settings.
+    /// LAN-optimized settings (same WiFi).
     public enum LAN {
         public static let heartbeatInterval: TimeInterval = 5.0
-        public static let defaultBitrate: Int = 8_000_000
-        public static let lowBitrate: Int = 4_000_000
-        public static let highBitrate: Int = 12_000_000
+        public static let defaultBitrate: Int = 12_000_000
+        public static let lowBitrate: Int = 6_000_000
+        public static let highBitrate: Int = 20_000_000
         public static let defaultFrameRate: Int = 30
         public static let lowFrameRate: Int = 15
+        public static let defaultScaleFactor: Double = 0.75
         public static let highRTTThreshold: Double = 100
         public static let lowRTTThreshold: Double = 50
     }
 
-    /// WAN/Cellular-optimized settings (4G/5G).
+    /// WAN settings (different network, 20-200ms RTT).
     public enum WAN {
-        public static let heartbeatInterval: TimeInterval = 15.0
-        public static let defaultBitrate: Int = 1_500_000
-        public static let lowBitrate: Int = 500_000
-        public static let highBitrate: Int = 3_000_000
+        public static let heartbeatInterval: TimeInterval = 10.0
+        public static let defaultBitrate: Int = 3_000_000
+        public static let lowBitrate: Int = 1_500_000
+        public static let highBitrate: Int = 6_000_000
         public static let defaultFrameRate: Int = 24
-        public static let lowFrameRate: Int = 10
-        public static let highRTTThreshold: Double = 250
-        public static let lowRTTThreshold: Double = 100
+        public static let lowFrameRate: Int = 12
+        public static let defaultScaleFactor: Double = 0.5
+        public static let highRTTThreshold: Double = 200
+        public static let lowRTTThreshold: Double = 80
     }
 }
 
@@ -131,6 +133,13 @@ public enum ConnectionMode: String, Codable, Sendable, CaseIterable, Identifiabl
         switch self {
         case .lan: return MyRemoteConstants.LAN.lowRTTThreshold
         case .wan: return MyRemoteConstants.WAN.lowRTTThreshold
+        }
+    }
+
+    public var defaultScaleFactor: Double {
+        switch self {
+        case .lan: return MyRemoteConstants.LAN.defaultScaleFactor
+        case .wan: return MyRemoteConstants.WAN.defaultScaleFactor
         }
     }
 }

@@ -1,20 +1,20 @@
+import os
 import UIKit
 
 /// Translates iOS touch gestures into macOS mouse/scroll events.
 ///
-/// Gesture mapping:
-///   - One-finger tap        → left click
-///   - One-finger double tap → double click
-///   - One-finger pan        → move cursor (or pan when zoomed)
-///   - Two-finger tap        → right click
-///   - Two-finger pan        → scroll wheel
+/// Gesture model:
+///   - Tap          → click at position (leftDown + leftUp)
+///   - Double tap   → double click
+///   - Two-finger tap → right click
+///   - One-finger drag → move cursor (NO click)
+///   - Long press + drag → click-and-drag
+///   - Two-finger drag → scroll wheel
+///   - Pinch        → zoom display (1x–5x)
 ///   - Two-finger double tap → reset zoom
-///   - Long press + drag     → click-and-drag
-///   - Pinch                 → zoom in/out (1x–5x)
 ///
-/// Coordinate mapping accounts for:
-///   1. Aspect-fit letterboxing (AVSampleBufferDisplayLayer.resizeAspect)
-///   2. UIView.transform (zoom/pan) — handled automatically by gesture.location(in:)
+/// Zoom is applied to the CALayer (not UIView.transform) so SwiftUI layout doesn't reset it.
+/// Coordinate mapping manually inverses the zoom/pan to get correct Mac screen positions.
 final class GestureHandler: NSObject, UIGestureRecognizerDelegate {
 
     var onMouseEvent: ((MouseEventType, CGPoint) -> Void)?
@@ -29,9 +29,8 @@ final class GestureHandler: NSObject, UIGestureRecognizerDelegate {
     private weak var targetView: VideoDisplayUIView?
     private var isDragging = false
 
-    private let lightFeedback = UIImpactFeedbackGenerator(style: .light)
-    private let mediumFeedback = UIImpactFeedbackGenerator(style: .medium)
-    private let heavyFeedback = UIImpactFeedbackGenerator(style: .heavy)
+    private let tapFeedback = UIImpactFeedbackGenerator(style: .light)
+    private let dragFeedback = UIImpactFeedbackGenerator(style: .heavy)
 
     // MARK: - Setup
 
@@ -41,181 +40,189 @@ final class GestureHandler: NSObject, UIGestureRecognizerDelegate {
         }
         targetView = view
         view.isMultipleTouchEnabled = true
+        view.clipsToBounds = true  // Clip zoomed content to view bounds.
+        tapFeedback.prepare()
+        dragFeedback.prepare()
 
-        lightFeedback.prepare()
-        mediumFeedback.prepare()
-        heavyFeedback.prepare()
-
-        // --- Taps ---
-
-        let singleTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap))
-        singleTap.numberOfTapsRequired = 1
-        singleTap.numberOfTouchesRequired = 1
-        singleTap.delegate = self
-
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap))
         doubleTap.numberOfTapsRequired = 2
-        doubleTap.numberOfTouchesRequired = 1
-
         let twoFingerTap = UITapGestureRecognizer(target: self, action: #selector(handleTwoFingerTap))
-        twoFingerTap.numberOfTapsRequired = 1
         twoFingerTap.numberOfTouchesRequired = 2
-        twoFingerTap.delegate = self
-
-        let twoFingerDoubleTap = UITapGestureRecognizer(target: self, action: #selector(handleTwoFingerDoubleTap))
-        twoFingerDoubleTap.numberOfTapsRequired = 2
-        twoFingerDoubleTap.numberOfTouchesRequired = 2
-
-        // --- Continuous ---
+        let resetZoomTap = UITapGestureRecognizer(target: self, action: #selector(handleResetZoom))
+        resetZoomTap.numberOfTapsRequired = 2
+        resetZoomTap.numberOfTouchesRequired = 2
 
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan))
-        pan.minimumNumberOfTouches = 1
         pan.maximumNumberOfTouches = 1
-        pan.delegate = self
-
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress))
         longPress.minimumPressDuration = 0.4
-        longPress.delegate = self
-
         let scroll = UIPanGestureRecognizer(target: self, action: #selector(handleScroll))
         scroll.minimumNumberOfTouches = 2
         scroll.maximumNumberOfTouches = 2
         scroll.delegate = self
-
         let pinch = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch))
         pinch.delegate = self
 
-        // --- Dependencies ---
-
-        // Tap only fires if pan didn't recognize (prevents click-on-drag).
-        singleTap.require(toFail: pan)
-        singleTap.require(toFail: doubleTap)
-        singleTap.require(toFail: longPress)
-        twoFingerTap.require(toFail: twoFingerDoubleTap)
+        // Tap waits for pan/longPress to fail (prevents click-on-drag).
+        tap.require(toFail: pan)
+        tap.require(toFail: longPress)
+        tap.require(toFail: doubleTap)
+        twoFingerTap.require(toFail: resetZoomTap)
         twoFingerTap.require(toFail: scroll)
 
-        // --- Add all ---
-        for g in [singleTap, doubleTap, twoFingerTap, twoFingerDoubleTap,
+        for g in [tap, doubleTap, twoFingerTap, resetZoomTap,
                   pan, longPress, scroll, pinch] as [UIGestureRecognizer] {
             view.addGestureRecognizer(g)
         }
+        Log.input.info("Gestures attached — view: \(Int(view.bounds.width))x\(Int(view.bounds.height))")
     }
 
     // MARK: - UIGestureRecognizerDelegate
 
-    /// Allow pinch + scroll to fire simultaneously (both use 2 fingers).
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+    func gestureRecognizer(_ g: UIGestureRecognizer,
                            shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-        let isPinch = gestureRecognizer is UIPinchGestureRecognizer || other is UIPinchGestureRecognizer
-        let isScroll = (gestureRecognizer.numberOfTouches >= 2 && gestureRecognizer is UIPanGestureRecognizer)
-                    || (other.numberOfTouches >= 2 && other is UIPanGestureRecognizer)
-        if isPinch && isScroll { return true }
-        return false
+        // Allow pinch + two-finger scroll simultaneously.
+        let isPinch = g is UIPinchGestureRecognizer || other is UIPinchGestureRecognizer
+        let isPan = g is UIPanGestureRecognizer || other is UIPanGestureRecognizer
+        return isPinch && isPan
     }
 
-    // MARK: - Zoom
+    // MARK: - Zoom (applied to CALayer, not UIView.transform)
 
-    private func applyTransform() {
+    private func applyZoom() {
         guard let view = targetView else { return }
-        view.transform = CGAffineTransform.identity
-            .translatedBy(x: panOffset.x, y: panOffset.y)
-            .scaledBy(x: zoomScale, y: zoomScale)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        // Scale from the center of the view, then translate for pan.
+        var t = CATransform3DIdentity
+        t = CATransform3DTranslate(t, panOffset.x, panOffset.y, 0)
+        t = CATransform3DScale(t, zoomScale, zoomScale, 1)
+        view.displayLayer.transform = t
+        CATransaction.commit()
     }
 
-    func resetZoom() {
+    private func resetZoomAnimated() {
         zoomScale = 1.0
         panOffset = .zero
-        UIView.animate(withDuration: 0.25) { [self] in
-            applyTransform()
-        }
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(0.25)
+        targetView?.displayLayer.transform = CATransform3DIdentity
+        CATransaction.commit()
     }
 
-    // MARK: - Coordinate Translation
+    // MARK: - Coordinate Mapping
 
-    func convertToServerCoordinates(_ touchPoint: CGPoint) -> CGPoint {
+    /// Maps a touch point on the iPhone screen → Mac screen coordinates.
+    ///
+    /// When zoomed, the display layer is scaled/panned via CATransform3D.
+    /// `gesture.location(in: view)` returns the touch in the VIEW's coordinate space
+    /// (unaffected by layer transform). We manually inverse the zoom/pan to find
+    /// the original (unzoomed) position, then map through the aspect-fit video rect.
+    private func serverPoint(from gesture: UIGestureRecognizer) -> CGPoint {
         guard let view = targetView else { return .zero }
-        let videoRect = view.videoRect(forScreenWidth: serverScreenWidth, screenHeight: serverScreenHeight)
-        guard videoRect.width > 0, videoRect.height > 0 else { return .zero }
+        let touch = gesture.location(in: view)
 
-        let relX = (touchPoint.x - videoRect.origin.x) / videoRect.width
-        let relY = (touchPoint.y - videoRect.origin.y) / videoRect.height
+        // Inverse the zoom/pan transform.
+        // Forward: displayPos = (origPos - center) * scale + center + panOffset
+        // Inverse: origPos = (displayPos - center - panOffset) / scale + center
+        let cx = view.bounds.midX
+        let cy = view.bounds.midY
+        let origX = (touch.x - cx - panOffset.x) / zoomScale + cx
+        let origY = (touch.y - cy - panOffset.y) / zoomScale + cy
+
+        // Map through the aspect-fit video rect (based on unzoomed view bounds).
+        let rect = view.videoRect(forScreenWidth: serverScreenWidth, screenHeight: serverScreenHeight)
+        guard rect.width > 0, rect.height > 0 else { return .zero }
+
+        let x = (origX - rect.minX) / rect.width * serverScreenWidth
+        let y = (origY - rect.minY) / rect.height * serverScreenHeight
 
         return CGPoint(
-            x: max(0, min(serverScreenWidth, relX * serverScreenWidth)),
-            y: max(0, min(serverScreenHeight, relY * serverScreenHeight))
+            x: max(0, min(serverScreenWidth, x)),
+            y: max(0, min(serverScreenHeight, y))
         )
     }
 
-    // MARK: - Tap Handlers
+    // MARK: - Tap → Click
 
-    @objc private func handleSingleTap(_ g: UITapGestureRecognizer) {
-        let p = convertToServerCoordinates(g.location(in: targetView))
+    @objc private func handleTap(_ g: UITapGestureRecognizer) {
+        let p = serverPoint(from: g)
+        Log.input.debug("TAP at (\(Int(p.x)), \(Int(p.y)))")
         onMouseEvent?(.leftDown, p)
         onMouseEvent?(.leftUp, p)
-        lightFeedback.impactOccurred()
+        tapFeedback.impactOccurred()
     }
 
     @objc private func handleDoubleTap(_ g: UITapGestureRecognizer) {
-        let p = convertToServerCoordinates(g.location(in: targetView))
+        let p = serverPoint(from: g)
+        Log.input.debug("DOUBLE TAP at (\(Int(p.x)), \(Int(p.y)))")
         onMouseEvent?(.leftDown, p)
         onMouseEvent?(.leftUp, p)
         onMouseEvent?(.leftDown, p)
         onMouseEvent?(.leftUp, p)
-        mediumFeedback.impactOccurred()
+        tapFeedback.impactOccurred(intensity: 0.8)
     }
 
     @objc private func handleTwoFingerTap(_ g: UITapGestureRecognizer) {
-        let p = convertToServerCoordinates(g.location(in: targetView))
+        let p = serverPoint(from: g)
+        Log.input.debug("RIGHT CLICK at (\(Int(p.x)), \(Int(p.y)))")
         onMouseEvent?(.rightDown, p)
         onMouseEvent?(.rightUp, p)
-        lightFeedback.impactOccurred()
+        tapFeedback.impactOccurred()
     }
 
-    @objc private func handleTwoFingerDoubleTap(_ g: UITapGestureRecognizer) {
-        resetZoom()
-        mediumFeedback.impactOccurred()
+    @objc private func handleResetZoom(_ g: UITapGestureRecognizer) {
+        Log.input.debug("RESET ZOOM from \(self.zoomScale)x")
+        resetZoomAnimated()
+        tapFeedback.impactOccurred(intensity: 0.8)
     }
 
-    // MARK: - Continuous Handlers
+    // MARK: - Drag → Cursor Move / Pan
 
     @objc private func handlePan(_ g: UIPanGestureRecognizer) {
         if isDragging { return }
 
-        // When zoomed: pan the view instead of moving cursor.
         if zoomScale > 1.01 {
-            guard let superview = targetView?.superview else { return }
+            // Zoomed → pan the display layer (not the view).
             if g.state == .changed {
-                let t = g.translation(in: superview)
+                let t = g.translation(in: targetView)
                 panOffset.x += t.x
                 panOffset.y += t.y
-                g.setTranslation(.zero, in: superview)
-                applyTransform()
+                g.setTranslation(.zero, in: targetView)
+                applyZoom()
             }
             return
         }
 
-        // Not zoomed: move cursor.
-        let p = convertToServerCoordinates(g.location(in: targetView))
+        // Not zoomed → move Mac cursor.
+        let p = serverPoint(from: g)
         if g.state == .began || g.state == .changed {
             onMouseEvent?(.move, p)
         }
     }
 
+    // MARK: - Long Press → Click-and-Drag
+
     @objc private func handleLongPress(_ g: UILongPressGestureRecognizer) {
-        let p = convertToServerCoordinates(g.location(in: targetView))
+        let p = serverPoint(from: g)
         switch g.state {
         case .began:
             isDragging = true
+            Log.input.debug("DRAG started at (\(Int(p.x)), \(Int(p.y)))")
             onMouseEvent?(.leftDown, p)
-            heavyFeedback.impactOccurred()
+            dragFeedback.impactOccurred()
         case .changed:
             onMouseEvent?(.move, p)
         case .ended, .cancelled:
+            Log.input.debug("DRAG ended at (\(Int(p.x)), \(Int(p.y)))")
             onMouseEvent?(.leftUp, p)
             isDragging = false
         default: break
         }
     }
+
+    // MARK: - Two-Finger → Scroll
 
     @objc private func handleScroll(_ g: UIPanGestureRecognizer) {
         guard let view = targetView else { return }
@@ -226,15 +233,20 @@ final class GestureHandler: NSObject, UIGestureRecognizerDelegate {
         }
     }
 
+    // MARK: - Pinch → Zoom
+
     @objc private func handlePinch(_ g: UIPinchGestureRecognizer) {
         switch g.state {
+        case .began:
+            Log.input.debug("PINCH started at \(self.zoomScale)x")
         case .changed:
             zoomScale = max(1.0, min(5.0, zoomScale * g.scale))
             g.scale = 1.0
             if zoomScale <= 1.01 { panOffset = .zero }
-            applyTransform()
+            applyZoom()
         case .ended:
-            if zoomScale <= 1.01 { resetZoom() }
+            Log.input.debug("PINCH ended at \(self.zoomScale)x")
+            if zoomScale <= 1.01 { resetZoomAnimated() }
         default: break
         }
     }

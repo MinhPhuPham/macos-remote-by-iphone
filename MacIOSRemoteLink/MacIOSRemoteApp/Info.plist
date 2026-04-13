@@ -2,13 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>LSUIElement</key>
-	<true/>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_myremote._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>MyRemote uses the local network for Bonjour discovery and connections.</string>
+	<string>MyRemote needs local network access to find and connect to your Mac.</string>
 </dict>
 </plist>

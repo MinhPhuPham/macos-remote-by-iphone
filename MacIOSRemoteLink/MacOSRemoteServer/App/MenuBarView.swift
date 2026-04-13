@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Content for the menu bar extra dropdown.
+/// Content for the menu bar extra popover (`.window` style).
 struct MenuBarView: View {
 
     @ObservedObject var server: ServerManager
@@ -10,38 +10,37 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 0) {
             if let pending = server.pendingApproval {
                 approvalSection(pending)
-                Divider()
+                divider
             }
 
             statusSection
-
-            Divider()
-
+            divider
             controlsSection
-
-            Divider()
-
-            Button("Quit MyRemote") {
-                server.stop()
-                NSApplication.shared.terminate(nil)
-            }
-            .keyboardShortcut("q")
+            divider
+            quitButton
         }
+        .padding(.vertical, 4)
     }
 
-    // MARK: - Approval
+    private var divider: some View {
+        Divider().padding(.vertical, 2)
+    }
+
+    // MARK: - Approval Request
 
     private func approvalSection(_ pending: ServerManager.PendingApproval) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "person.badge.shield.checkmark")
-                    .foregroundStyle(.orange)
-                Text("Connection Request")
-                    .font(.subheadline.bold())
-            }
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Connection Request", systemImage: "person.badge.shield.checkmark")
+                .font(.subheadline.bold())
+                .foregroundStyle(.orange)
 
-            Text("\"\(pending.deviceName)\" (\(pending.clientIP)) wants to connect.")
-                .font(.caption)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(pending.deviceName)
+                    .font(.headline)
+                Text(pending.clientIP)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             Text("This device will see your screen and control mouse & keyboard.")
                 .font(.caption2)
@@ -52,99 +51,127 @@ struct MenuBarView: View {
                     server.approveConnection(trustPermanently: false)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.green)
+                .tint(.blue)
                 .controlSize(.small)
 
                 Button("Always Allow") {
                     server.approveConnection(trustPermanently: true)
                 }
+                .buttonStyle(.bordered)
                 .controlSize(.small)
+
+                Spacer()
 
                 Button("Deny") {
                     server.denyConnection()
                 }
-                .buttonStyle(.bordered)
-                .tint(.red)
+                .foregroundStyle(.red)
                 .controlSize(.small)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 8)
     }
 
-    // MARK: - Sections
+    // MARK: - Status
 
     private var statusSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
                 Circle()
                     .fill(statusColor)
                     .frame(width: 8, height: 8)
-                    .accessibilityHidden(true)
                 Text(server.statusMessage)
                     .font(.subheadline)
             }
 
             if let clientName = server.authManager.connectedDeviceName {
-                Text("Client: \(clientName)")
+                Label(clientName, systemImage: "iphone")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if server.isRunning && server.connectedClient == nil {
                 Divider().padding(.vertical, 2)
-                HStack(spacing: 4) {
-                    Image(systemName: "link.circle")
+                HStack(spacing: 6) {
+                    Image(systemName: "network")
                         .foregroundStyle(.blue)
-                    Text("Pairing Code:")
+                    Text("Port:")
                         .font(.caption)
-                    Text(server.pairingManager.formattedCode)
-                        .font(.system(.caption, design: .monospaced).bold())
+                        .foregroundStyle(.secondary)
+                    Text("\(MyRemoteConstants.defaultPort)")
+                        .font(.system(.body, design: .monospaced).bold())
                         .textSelection(.enabled)
-                }
-
-                if !server.pairingManager.isRegistered {
-                    Text("Signaling server offline — use Manual IP")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Server status: \(server.statusMessage)")
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
     }
 
+    // MARK: - Controls
+
     private var controlsSection: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 2) {
             if server.isRunning {
-                Button("Stop Server") {
+                menuButton("Stop Server", icon: "stop.fill", role: .destructive) {
                     server.stop()
                 }
 
                 if server.connectedClient != nil {
-                    Button("Disconnect Client") {
+                    menuButton("Disconnect Client", icon: "xmark.circle") {
                         server.connectedClient?.disconnect()
                     }
                 }
             } else {
-                Button("Start Server") {
+                menuButton("Start Server", icon: "play.fill") {
                     server.start()
                 }
             }
 
-            Divider()
+            Divider().padding(.vertical, 2)
 
-            Button("Open Setup Guide...") {
+            menuButton("Setup Guide...", icon: "questionmark.circle") {
                 openWindow(id: "onboarding")
             }
 
             SettingsLink {
-                Text("Settings...")
+                Label("Settings...", systemImage: "gear")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 4)
             .keyboardShortcut(",")
         }
+    }
+
+    // MARK: - Quit
+
+    private var quitButton: some View {
+        menuButton("Quit MyRemote", icon: "power") {
+            server.stop()
+            NSApplication.shared.terminate(nil)
+        }
+        .keyboardShortcut("q")
+    }
+
+    // MARK: - Helpers
+
+    private func menuButton(_ title: String, icon: String,
+                            role: ButtonRole? = nil,
+                            action: @escaping () -> Void) -> some View {
+        Button(role: role, action: action) {
+            Label(title, systemImage: icon)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 4)
     }
 
     private var statusColor: Color {

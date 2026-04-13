@@ -47,7 +47,6 @@ final class ServerManager: ObservableObject {
 
     let authManager: AuthManager
     let trustedDeviceStore: TrustedDeviceStore
-    let pairingManager: PairingCodeManager
     private let advertiser: BonjourAdvertiser
     private let mouseInjector = MouseInjector()
     private let keyboardInjector = KeyboardInjector()
@@ -62,6 +61,9 @@ final class ServerManager: ObservableObject {
     /// (local variable, only weak refs in closures).
     private var pendingClient: ServerConnection?
 
+    /// Track whether we've logged the first successful input validation (avoid spamming).
+    private var hasLoggedFirstInput = false
+
     // MARK: - Init
 
     init() {
@@ -69,7 +71,6 @@ final class ServerManager: ObservableObject {
         self.trustedDeviceStore = store
         self.authManager = AuthManager(trustedDeviceStore: store)
         self.advertiser = BonjourAdvertiser()
-        self.pairingManager = PairingCodeManager()
 
         advertiser.onNewConnection = { [weak self] nwConnection in
             self?.handleIncomingConnection(nwConnection)
@@ -91,7 +92,6 @@ final class ServerManager: ObservableObject {
             }
         }
         advertiser.start(tlsIdentity: nil)
-        pairingManager.generateAndRegister()
         isRunning = true
         Log.app.info("Server started on port \(MyRemoteConstants.defaultPort)")
         statusMessage = "Waiting for connections..."
@@ -102,7 +102,6 @@ final class ServerManager: ObservableObject {
         connectedClient?.disconnect()
         connectedClient = nil
         advertiser.stop()
-        pairingManager.unregister()
         authManager.endSession()
         isRunning = false
         Log.app.info("Server stopped")
@@ -113,7 +112,24 @@ final class ServerManager: ObservableObject {
 
     private func handleIncomingConnection(_ nwConnection: NWConnection) {
         Log.connection.info("New connection from \(nwConnection.endpoint.debugDescription)")
+
+        // If there's a stale session (client disconnected without proper cleanup),
+        // check if the connected client is still alive. If not, clean up and allow.
         if authManager.hasActiveSession {
+            if let existing = connectedClient, existing.isConnected {
+                Log.connection.info("Rejecting connection — active session exists")
+                nwConnection.cancel()
+                return
+            }
+            // Stale session — clean up before accepting new connection.
+            Log.connection.warning("Stale session detected — cleaning up")
+            handleClientDisconnected()
+        }
+
+        // Reject if we already have a pending client (dual-address scenario:
+        // iPhone resolves Bonjour to multiple IPs, listener receives both).
+        if pendingClient != nil {
+            Log.connection.info("Rejecting — pending auth already in progress")
             nwConnection.cancel()
             return
         }
@@ -125,10 +141,18 @@ final class ServerManager: ObservableObject {
             self?.handleFrame(frame, from: conn)
         }
 
-        client.onDisconnected = { [weak self] _ in
+        client.onDisconnected = { [weak self] disconnectedClient in
             DispatchQueue.main.async { [weak self] in
-                self?.pendingClient = nil
-                self?.handleClientDisconnected()
+                guard let self else { return }
+                // Only full cleanup if this was the authenticated client.
+                if self.connectedClient === disconnectedClient {
+                    self.handleClientDisconnected()
+                }
+                // Clear pending ref if it matches (unauthenticated disconnect).
+                if self.pendingClient === disconnectedClient {
+                    Log.connection.info("Pending client disconnected before auth")
+                    self.pendingClient = nil
+                }
             }
         }
 
@@ -159,7 +183,7 @@ final class ServerManager: ObservableObject {
         case .disconnect:
             DispatchQueue.main.async { [weak self] in self?.handleClientDisconnected() }
         default:
-            break
+            Log.connection.debug("Unhandled frame type: \(frame.type.rawValue)")
         }
     }
 
@@ -179,6 +203,10 @@ final class ServerManager: ObservableObject {
             Log.app.warning("Rejected input event with invalid session token")
             return
         }
+        if !hasLoggedFirstInput {
+            Log.app.debug("First input event validated — session token OK")
+            hasLoggedFirstInput = true
+        }
         handler(frame)
     }
 
@@ -186,17 +214,20 @@ final class ServerManager: ObservableObject {
         guard let event = try? MessageCodec.decodePayload(MouseEvent.self, from: frame) else { return }
         // Validate coordinates.
         guard event.x.isFinite, event.y.isFinite, event.x >= 0, event.y >= 0 else { return }
+        Log.input.debug("Mouse \(event.type.rawValue) at (\(event.x), \(event.y))")
         mouseInjector.inject(event: event)
     }
 
     private func handleKeyEvent(_ frame: ProtocolFrame) {
         guard let event = try? MessageCodec.decodePayload(KeyEvent.self, from: frame) else { return }
+        Log.input.debug("Key \(event.keyCode) \(event.isDown ? "down" : "up")")
         keyboardInjector.inject(event: event)
     }
 
     private func handleScrollEvent(_ frame: ProtocolFrame) {
         guard let event = try? MessageCodec.decodePayload(ScrollEvent.self, from: frame) else { return }
         guard event.deltaX.isFinite, event.deltaY.isFinite else { return }
+        Log.input.debug("Scroll deltaX=\(event.deltaX) deltaY=\(event.deltaY)")
         mouseInjector.scroll(deltaX: Int32(event.deltaX), deltaY: Int32(event.deltaY))
     }
 
@@ -317,6 +348,7 @@ final class ServerManager: ObservableObject {
         stopVideoPipeline()
         connectedClient = nil
         authManager.endSession()
+        hasLoggedFirstInput = false
         statusMessage = isRunning ? "Waiting for connections..." : "Server stopped"
         Log.app.info("Client disconnected")
     }
@@ -324,16 +356,22 @@ final class ServerManager: ObservableObject {
     // MARK: - Video Pipeline
 
     private func startVideoPipeline(for client: ServerConnection) {
+        Log.capture.info("Creating capture manager")
         let capture = ScreenCaptureManager()
         self.captureManager = capture
 
         Task {
             do {
-                try await capture.startCapture(scaleFactor: 0.75)
+                // 0.75× balances quality vs latency on LAN.
+                // Full 1.0× creates frames too large for low-latency streaming.
+                let scale = MyRemoteConstants.LAN.defaultScaleFactor
+                try await capture.startCapture(scaleFactor: CGFloat(scale))
+                Log.capture.info("Capture started: \(capture.displayWidth)x\(capture.displayHeight) at \(scale)x")
 
-                let scaledWidth = Int(CGFloat(capture.displayWidth) * 0.75)
-                let scaledHeight = Int(CGFloat(capture.displayHeight) * 0.75)
+                let scaledWidth = Int(Double(capture.displayWidth) * scale)
+                let scaledHeight = Int(Double(capture.displayHeight) * scale)
                 let encoder = VideoEncoder(width: scaledWidth, height: scaledHeight)
+                Log.encoder.info("Encoder created: \(scaledWidth)x\(scaledHeight)")
 
                 // Wire: encoder SPS/PPS config → client
                 encoder.onVideoConfig = { [weak client] sps, pps in
@@ -350,6 +388,8 @@ final class ServerManager: ObservableObject {
                 encoder.onEncodedFrame = { [weak client] data, isKeyframe in
                     client?.send(type: .videoFrame, payload: data)
                 }
+
+                Log.capture.info("Wiring capture → encoder → client")
 
                 // Wire: captured pixels → encoder
                 capture.onPixelBuffer = { [weak encoder] pixelBuffer, timestamp in

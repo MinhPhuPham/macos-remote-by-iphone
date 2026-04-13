@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import Network
+import os
 
 /// Discovered server info.
 struct DiscoveredServer: Identifiable, Hashable {
@@ -28,6 +29,7 @@ final class ServerBrowser: ObservableObject {
     // MARK: - Start / Stop
 
     func startBrowsing() {
+        Log.connection.debug("Starting Bonjour browser for \(MyRemoteConstants.bonjourServiceType)")
         let descriptor = NWBrowser.Descriptor.bonjour(
             type: MyRemoteConstants.bonjourServiceType,
             domain: nil
@@ -41,8 +43,13 @@ final class ServerBrowser: ObservableObject {
             DispatchQueue.main.async {
                 switch state {
                 case .ready:
+                    Log.connection.debug("Browser ready")
                     self?.isSearching = true
-                case .failed, .cancelled:
+                case .failed:
+                    Log.connection.warning("Browser failed")
+                    self?.isSearching = false
+                case .cancelled:
+                    Log.connection.debug("Browser cancelled")
                     self?.isSearching = false
                 default:
                     break
@@ -51,6 +58,7 @@ final class ServerBrowser: ObservableObject {
         }
 
         browser?.browseResultsChangedHandler = { [weak self] results, _ in
+            Log.connection.debug("Found \(results.count) servers")
             DispatchQueue.main.async {
                 self?.servers = results.compactMap { result in
                     let name: String
@@ -72,6 +80,7 @@ final class ServerBrowser: ObservableObject {
     }
 
     func stopBrowsing() {
+        Log.connection.debug("Browser stopped")
         browser?.cancel()
         browser = nil
         isSearching = false

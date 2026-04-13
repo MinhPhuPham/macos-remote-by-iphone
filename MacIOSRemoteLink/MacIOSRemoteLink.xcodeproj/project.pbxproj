@@ -18,7 +18,6 @@
 				Constants.swift,
 				KeyCodeMap.swift,
 				MessageCodec.swift,
-				PairingModels.swift,
 				Protocol.swift,
 			);
 			target = 4B98BC262F8D28A7001C7199 /* MacOSRemoteServer */;
@@ -29,6 +28,13 @@
 				Info.plist,
 			);
 			target = 4B98BC262F8D28A7001C7199 /* MacOSRemoteServer */;
+		};
+		4B98BCF32F8D2E29001C7199 /* Exceptions for "MacIOSRemoteApp" folder in "MacIOSRemoteApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 4B98BC382F8D28E8001C7199 /* MacIOSRemoteApp */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -43,6 +49,9 @@
 		};
 		4B98BC3A2F8D28E8001C7199 /* MacIOSRemoteApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				4B98BCF32F8D2E29001C7199 /* Exceptions for "MacIOSRemoteApp" folder in "MacIOSRemoteApp" target */,
+			);
 			path = MacIOSRemoteApp;
 			sourceTree = "<group>";
 		};
@@ -338,8 +347,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 99PF879H8X;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -385,8 +394,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 99PF879H8X;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -434,8 +443,10 @@
 				DEVELOPMENT_TEAM = 99PF879H8X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MacIOSRemoteApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "MacIOS remote";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "MyRemote needs local network access to find and connect to your Mac.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -474,8 +485,10 @@
 				DEVELOPMENT_TEAM = 99PF879H8X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = MacIOSRemoteApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "MacIOS remote";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "MyRemote needs local network access to find and connect to your Mac.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

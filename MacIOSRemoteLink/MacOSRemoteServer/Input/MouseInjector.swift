@@ -1,6 +1,7 @@
 import ApplicationServices
 import CoreGraphics
 import Foundation
+import os
 
 /// Injects mouse events into macOS via CGEvent.
 final class MouseInjector {
@@ -19,6 +20,7 @@ final class MouseInjector {
     // MARK: - Event Injection
 
     func inject(event: MouseEvent) {
+        Log.input.debug("Mouse inject: \(event.type.rawValue) at (\(event.x), \(event.y))")
         let point = CGPoint(x: event.x, y: event.y)
 
         let cgEventType: CGEventType

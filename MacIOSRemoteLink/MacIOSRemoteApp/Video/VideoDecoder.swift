@@ -6,111 +6,110 @@ import VideoToolbox
 
 /// H.264 hardware decoder using VideoToolbox.
 /// Receives SPS/PPS config and NAL units, outputs CVPixelBuffers.
-/// Thread-safe: all access to session/formatDescription is serialized.
+///
+/// Uses SYNCHRONOUS decode to provide natural backpressure:
+/// - The network thread blocks until decode completes (~1-2ms on hardware)
+/// - This prevents frame accumulation that causes memory exhaustion
+/// - Hardware H.264 decode is fast enough for 30fps real-time
 final class VideoDecoder {
 
-    /// Called with each decoded pixel buffer (fires on VideoToolbox's internal thread).
+    /// Called with each decoded pixel buffer.
+    /// With synchronous decode, this fires on the caller's thread inside `decode()`.
     var onDecodedFrame: ((CVPixelBuffer, CMTime) -> Void)?
 
     private var session: VTDecompressionSession?
     private var formatDescription: CMVideoFormatDescription?
-    private let queue = DispatchQueue(label: "\(AppConstants.queuePrefix).videodecoder")
+    private let lock = NSLock()
 
     // MARK: - Configuration
 
-    /// Initialize the decoder with SPS and PPS parameter sets from the server.
     func configure(sps: Data, pps: Data) throws {
-        try queue.sync {
-            // Tear down existing session.
-            invalidateInternal()
+        lock.lock()
+        defer { lock.unlock() }
 
-            // Build CMFormatDescription from SPS + PPS.
-            // SAFETY: All pointer usage is nested inside withUnsafeBytes scopes
-            // to prevent dangling pointer access.
-            var formatDesc: CMFormatDescription?
-            let status: OSStatus = sps.withUnsafeBytes { spsRaw in
-                pps.withUnsafeBytes { ppsRaw in
-                    guard let spsBase = spsRaw.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                          let ppsBase = ppsRaw.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
-                        return errSecParam
-                    }
-                    var pointers: [UnsafePointer<UInt8>] = [spsBase, ppsBase]
-                    var sizes: [Int] = [sps.count, pps.count]
-                    return pointers.withUnsafeMutableBufferPointer { pointersPtr in
-                        sizes.withUnsafeMutableBufferPointer { sizesPtr in
-                            CMVideoFormatDescriptionCreateFromH264ParameterSets(
-                                allocator: nil,
-                                parameterSetCount: 2,
-                                parameterSetPointers: pointersPtr.baseAddress!,
-                                parameterSetSizes: sizesPtr.baseAddress!,
-                                nalUnitHeaderLength: 4,
-                                formatDescriptionOut: &formatDesc
-                            )
-                        }
+        invalidateInternal()
+
+        Log.video.info("Configuring decoder: SPS=\(sps.count)B PPS=\(pps.count)B")
+
+        var formatDesc: CMFormatDescription?
+        let status: OSStatus = sps.withUnsafeBytes { spsRaw in
+            pps.withUnsafeBytes { ppsRaw in
+                guard let spsBase = spsRaw.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                      let ppsBase = ppsRaw.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+                    return errSecParam
+                }
+                var pointers: [UnsafePointer<UInt8>] = [spsBase, ppsBase]
+                var sizes: [Int] = [sps.count, pps.count]
+                return pointers.withUnsafeMutableBufferPointer { pointersPtr in
+                    sizes.withUnsafeMutableBufferPointer { sizesPtr in
+                        CMVideoFormatDescriptionCreateFromH264ParameterSets(
+                            allocator: nil,
+                            parameterSetCount: 2,
+                            parameterSetPointers: pointersPtr.baseAddress!,
+                            parameterSetSizes: sizesPtr.baseAddress!,
+                            nalUnitHeaderLength: 4,
+                            formatDescriptionOut: &formatDesc
+                        )
                     }
                 }
             }
-
-            guard status == noErr, let desc = formatDesc else {
-                throw DecoderError.formatCreationFailed(status)
-            }
-
-            self.formatDescription = desc
-            try createSession(formatDescription: desc)
         }
+
+        guard status == noErr, let desc = formatDesc else {
+            throw DecoderError.formatCreationFailed(status)
+        }
+
+        self.formatDescription = desc
+        try createSession(formatDescription: desc)
+        Log.video.info("Decoder session created")
     }
 
     // MARK: - Decoding
 
-    /// Decode a single H.264 NAL unit (as received in a VIDEO_FRAME message).
-    func decode(nalData: Data, presentationTime: CMTime = CMTime(value: 0, timescale: 1)) {
-        queue.sync {
-            guard let session = session, let formatDesc = formatDescription else { return }
+    private var decodeCount: Int = 0
 
-            let nalLength = nalData.count
+    func decode(nalData: Data) {
+        lock.lock()
+        defer { lock.unlock() }
 
-            // Create CMBlockBuffer with its own memory (safe for async decode).
+        guard let session = session, let formatDesc = formatDescription else {
+            Log.video.debug("Decode skipped — no session configured")
+            return
+        }
+
+        decodeCount += 1
+        let frameNum = decodeCount
+
+        // Use the NAL data directly — synchronous decode completes before
+        // withUnsafeBytes exits, so the pointer stays valid.
+        nalData.withUnsafeBytes { rawBuffer in
+            guard let baseAddress = rawBuffer.baseAddress else { return }
+
             var blockBuffer: CMBlockBuffer?
             var status = CMBlockBufferCreateWithMemoryBlock(
                 allocator: nil,
-                memoryBlock: nil,
-                blockLength: nalLength,
-                blockAllocator: nil,
+                memoryBlock: UnsafeMutableRawPointer(mutating: baseAddress),
+                blockLength: nalData.count,
+                blockAllocator: kCFAllocatorNull,
                 customBlockSource: nil,
                 offsetToData: 0,
-                dataLength: nalLength,
+                dataLength: nalData.count,
                 flags: 0,
                 blockBufferOut: &blockBuffer
             )
             guard status == kCMBlockBufferNoErr, let buffer = blockBuffer else {
-                Log.video.warning("Failed to create block buffer: \(status)")
+                Log.video.warning("BlockBuffer failed: \(status)")
                 return
             }
 
-            // Copy NAL data into the block buffer's owned memory.
-            nalData.withUnsafeBytes { rawBuffer in
-                guard let baseAddress = rawBuffer.baseAddress else { return }
-                status = CMBlockBufferReplaceDataBytes(
-                    with: baseAddress,
-                    blockBuffer: buffer,
-                    offsetIntoDestination: 0,
-                    dataLength: nalLength
-                )
-            }
-            guard status == kCMBlockBufferNoErr else {
-                Log.video.warning("Failed to copy NAL data: \(status)")
-                return
-            }
-
-            // Create CMSampleBuffer.
             var sampleBuffer: CMSampleBuffer?
             var timingInfo = CMSampleTimingInfo(
                 duration: .invalid,
-                presentationTimeStamp: presentationTime,
+                presentationTimeStamp: .zero,
                 decodeTimeStamp: .invalid
             )
 
-            let sampleStatus = CMSampleBufferCreateReady(
+            status = CMSampleBufferCreateReady(
                 allocator: nil,
                 dataBuffer: buffer,
                 formatDescription: formatDesc,
@@ -121,27 +120,35 @@ final class VideoDecoder {
                 sampleSizeArray: nil,
                 sampleBufferOut: &sampleBuffer
             )
-
-            guard sampleStatus == noErr, let sample = sampleBuffer else {
-                Log.video.warning("Failed to create sample buffer: \(sampleStatus)")
+            guard status == noErr, let sample = sampleBuffer else {
+                Log.video.warning("SampleBuffer failed: \(status)")
                 return
             }
 
-            // Decode with inline output handler (VTDecompressionSessionSetOutputHandler
-            // is not available on iOS).
+            // Truly synchronous decode — empty flags [].
+            // Output handler fires BEFORE DecodeFrame returns.
             var flagsOut = VTDecodeInfoFlags()
             let decodeStatus = VTDecompressionSessionDecodeFrame(
                 session,
                 sampleBuffer: sample,
-                flags: [._EnableAsynchronousDecompression],
+                flags: [],
                 infoFlagsOut: &flagsOut
-            ) { [weak self] status, _, imageBuffer, presentationTimeStamp, _ in
-                guard status == noErr, let pixelBuffer = imageBuffer else { return }
-                self?.onDecodedFrame?(pixelBuffer, presentationTimeStamp)
+            ) { [weak self] cbStatus, _, imageBuffer, pts, _ in
+                if cbStatus != noErr {
+                    Log.video.warning("Decode callback error: \(cbStatus)")
+                    return
+                }
+                guard let pixelBuffer = imageBuffer else {
+                    Log.video.warning("Decode callback: no pixel buffer")
+                    return
+                }
+                self?.onDecodedFrame?(pixelBuffer, pts)
             }
 
             if decodeStatus != noErr {
-                Log.video.warning("Decode frame failed: \(decodeStatus)")
+                Log.video.warning("DecodeFrame #\(frameNum) failed: \(decodeStatus)")
+            } else if frameNum <= 3 || frameNum % 300 == 0 {
+                Log.video.debug("Decoded frame #\(frameNum) (\(nalData.count)B)")
             }
         }
     }
@@ -149,7 +156,10 @@ final class VideoDecoder {
     // MARK: - Lifecycle
 
     func invalidate() {
-        queue.sync { invalidateInternal() }
+        lock.lock()
+        defer { lock.unlock() }
+        invalidateInternal()
+        Log.video.info("Decoder invalidated")
     }
 
     private func invalidateInternal() {
@@ -161,9 +171,6 @@ final class VideoDecoder {
         formatDescription = nil
     }
 
-    // MARK: - Internal
-
-    /// Must be called on `queue`.
     private func createSession(formatDescription: CMVideoFormatDescription) throws {
         let outputAttributes: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA

@@ -1,5 +1,6 @@
-import Foundation
 import CoreGraphics
+import Foundation
+import os
 
 /// Injects keyboard events into macOS via CGEvent.
 final class KeyboardInjector {
@@ -8,6 +9,7 @@ final class KeyboardInjector {
 
     /// Inject a single key event (down or up).
     func inject(event: KeyEvent) {
+        Log.input.debug("Key inject: code=\(event.keyCode) down=\(event.isDown)")
         let flags = CGEventFlags(rawValue: event.modifiers)
         injectKey(keyCode: event.keyCode, isDown: event.isDown, modifiers: flags)
     }

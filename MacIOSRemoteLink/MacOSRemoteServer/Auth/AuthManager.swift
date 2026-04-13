@@ -168,15 +168,24 @@ final class AuthManager: ObservableObject {
         }
         currentSessionToken = token
         connectedDeviceName = deviceName
+        Log.auth.info("Session created for \(deviceName)")
         return token
     }
 
     func validateSession(_ token: String) -> Bool {
-        guard let current = currentSessionToken else { return false }
-        return constantTimeEqual(token, current)
+        guard let current = currentSessionToken else {
+            Log.auth.warning("Session validation failed — no active session")
+            return false
+        }
+        let valid = constantTimeEqual(token, current)
+        if !valid {
+            Log.auth.warning("Session validation failed — token mismatch")
+        }
+        return valid
     }
 
     func endSession() {
+        Log.auth.info("Session ended")
         currentSessionToken = nil
         connectedDeviceName = nil
     }

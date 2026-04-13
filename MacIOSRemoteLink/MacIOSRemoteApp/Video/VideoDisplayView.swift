@@ -1,52 +1,73 @@
 import AVFoundation
 import CoreMedia
+import os
 import SwiftUI
 
-/// UIKit view that hosts an AVSampleBufferDisplayLayer for rendering decoded H.264 frames.
+/// UIKit view that hosts an AVSampleBufferDisplayLayer for real-time H.264 rendering.
+///
+/// No `controlTimebase` is set — Apple docs: "If you don't set this property,
+/// the layer renders all enqueued sample buffers immediately."
+/// This is exactly what we need for real-time streaming.
 final class VideoDisplayUIView: UIView {
 
     let displayLayer = AVSampleBufferDisplayLayer()
 
+    var onReady: ((VideoDisplayUIView) -> Void)?
+    private var didFireReady = false
+
     override init(frame: CGRect) {
         super.init(frame: frame)
-        setupLayer()
+        setup()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        setupLayer()
+        setup()
     }
 
-    private func setupLayer() {
+    private func setup() {
         backgroundColor = .black
         displayLayer.videoGravity = .resizeAspect
         displayLayer.preventsDisplaySleepDuringVideoPlayback = true
         layer.addSublayer(displayLayer)
         isUserInteractionEnabled = true
         isMultipleTouchEnabled = true
+        // No controlTimebase → layer displays frames immediately when enqueued.
+        Log.video.debug("Display layer created (immediate mode, no timebase)")
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        // Disable implicit animations to prevent flicker during rotation.
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        displayLayer.frame = bounds
+        // Use bounds + position (not frame) so CATransform3D for zoom is preserved.
+        // Setting frame when transform != identity has undefined behavior.
+        displayLayer.bounds = CGRect(origin: .zero, size: bounds.size)
+        displayLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)
         CATransaction.commit()
+
+        if !didFireReady && bounds.width > 0 && bounds.height > 0 {
+            didFireReady = true
+            Log.video.info("View ready: \(Int(self.bounds.width))x\(Int(self.bounds.height))")
+            onReady?(self)
+            onReady = nil
+        }
     }
 
     func enqueue(_ sampleBuffer: CMSampleBuffer) {
         if displayLayer.status == .failed {
+            Log.video.warning("Display layer failed — flushing and retrying")
             displayLayer.flush()
         }
         displayLayer.enqueue(sampleBuffer)
     }
 
     func flush() {
+        Log.video.debug("Display layer flushed")
         displayLayer.flush()
     }
 
-    /// Returns the rect within bounds where video is actually displayed (aspect-fit).
+    /// The rect where video actually displays (aspect-fit letterboxing).
     func videoRect(forScreenWidth screenW: CGFloat, screenHeight screenH: CGFloat) -> CGRect {
         guard bounds.width > 0, bounds.height > 0, screenW > 0, screenH > 0 else {
             return bounds
@@ -55,61 +76,36 @@ final class VideoDisplayUIView: UIView {
         let viewAspect = bounds.width / bounds.height
 
         if videoAspect > viewAspect {
-            let height = bounds.width / videoAspect
-            return CGRect(x: 0, y: (bounds.height - height) / 2,
-                          width: bounds.width, height: height)
+            let h = bounds.width / videoAspect
+            return CGRect(x: 0, y: (bounds.height - h) / 2, width: bounds.width, height: h)
         } else {
-            let width = bounds.height * videoAspect
-            return CGRect(x: (bounds.width - width) / 2, y: 0,
-                          width: width, height: bounds.height)
+            let w = bounds.height * videoAspect
+            return CGRect(x: (bounds.width - w) / 2, y: 0, width: w, height: bounds.height)
         }
     }
 }
 
 // MARK: - SwiftUI Wrapper
 
-/// Wraps `VideoDisplayUIView` for SwiftUI. Uses a Coordinator to hold the reference
-/// so we never mutate external state during `makeUIView` (avoids AttributeGraph cycles).
 struct VideoDisplayView: UIViewRepresentable {
 
-    /// Coordinator stores the view reference and wires callbacks AFTER creation.
-    final class Coordinator {
-        var displayView: VideoDisplayUIView?
-        var onViewReady: ((VideoDisplayUIView) -> Void)?
-    }
-
-    /// Called once after the UIView is created and laid out.
     let onViewReady: (VideoDisplayUIView) -> Void
-
-    func makeCoordinator() -> Coordinator {
-        let c = Coordinator()
-        c.onViewReady = onViewReady
-        return c
-    }
 
     func makeUIView(context: Context) -> VideoDisplayUIView {
         let view = VideoDisplayUIView()
-        context.coordinator.displayView = view
+        view.onReady = onViewReady
         return view
     }
 
-    func updateUIView(_ uiView: VideoDisplayUIView, context: Context) {
-        // Fire onViewReady exactly once, after the view has a non-zero size.
-        if let callback = context.coordinator.onViewReady, uiView.bounds.size != .zero {
-            context.coordinator.onViewReady = nil
-            callback(uiView)
-        }
-    }
+    func updateUIView(_ uiView: VideoDisplayUIView, context: Context) {}
 
-    static func dismantleUIView(_ uiView: VideoDisplayUIView, coordinator: Coordinator) {
+    static func dismantleUIView(_ uiView: VideoDisplayUIView, coordinator: ()) {
         uiView.flush()
-        coordinator.displayView = nil
     }
 }
 
 // MARK: - Sample Buffer Factory
 
-/// Creates CMSampleBuffer from CVPixelBuffer. Caches format description.
 final class SampleBufferFactory {
 
     private var cachedFormatDescription: CMVideoFormatDescription?
@@ -123,9 +119,7 @@ final class SampleBufferFactory {
         if cachedFormatDescription == nil || width != cachedWidth || height != cachedHeight {
             var formatDesc: CMVideoFormatDescription?
             CMVideoFormatDescriptionCreateForImageBuffer(
-                allocator: nil,
-                imageBuffer: pixelBuffer,
-                formatDescriptionOut: &formatDesc
+                allocator: nil, imageBuffer: pixelBuffer, formatDescriptionOut: &formatDesc
             )
             cachedFormatDescription = formatDesc
             cachedWidth = width
@@ -142,13 +136,10 @@ final class SampleBufferFactory {
 
         var sampleBuffer: CMSampleBuffer?
         CMSampleBufferCreateReadyWithImageBuffer(
-            allocator: nil,
-            imageBuffer: pixelBuffer,
-            formatDescription: formatDesc,
-            sampleTiming: &timingInfo,
+            allocator: nil, imageBuffer: pixelBuffer,
+            formatDescription: formatDesc, sampleTiming: &timingInfo,
             sampleBufferOut: &sampleBuffer
         )
-
         return sampleBuffer
     }
 }

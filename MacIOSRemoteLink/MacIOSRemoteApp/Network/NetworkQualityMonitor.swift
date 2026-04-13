@@ -50,6 +50,7 @@ final class NetworkQualityMonitor: ObservableObject {
 
     func startMonitoring() {
         let interval = mode.heartbeatInterval
+        Log.quality.debug("Quality monitor started (interval=\(interval)s)")
         let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
         timer.schedule(deadline: .now() + interval, repeating: interval)
         timer.setEventHandler { [weak self] in
@@ -60,6 +61,7 @@ final class NetworkQualityMonitor: ObservableObject {
     }
 
     func stopMonitoring() {
+        Log.quality.debug("Quality monitor stopped")
         pingTimer?.cancel()
         pingTimer = nil
     }

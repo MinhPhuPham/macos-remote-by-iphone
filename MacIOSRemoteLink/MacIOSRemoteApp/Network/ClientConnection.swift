@@ -43,6 +43,7 @@ final class ClientConnection: ObservableObject {
 
     /// Connect via Bonjour endpoint (LAN discovery).
     func connect(to endpoint: NWEndpoint) {
+        Log.connection.debug("Connecting via Bonjour: \(endpoint.debugDescription)")
         connectionMode = .lan
         qualityMonitor.setMode(.lan)
         lastEndpoint = endpoint
@@ -51,6 +52,7 @@ final class ClientConnection: ObservableObject {
 
     /// Connect via manual hostname/IP and port (WAN/cellular).
     func connect(host: String, port: UInt16) {
+        Log.connection.debug("Connecting via IP: \(host):\(port)")
         connectionMode = .wan
         qualityMonitor.setMode(.wan)
         let endpoint = NWEndpoint.hostPort(
@@ -112,6 +114,7 @@ final class ClientConnection: ObservableObject {
     // MARK: - Disconnect
 
     func disconnect() {
+        Log.connection.debug("Disconnecting — cleaning up")
         stopReconnectTimer()
         stopClientHeartbeat()
         qualityMonitor.stopMonitoring()
@@ -134,6 +137,7 @@ final class ClientConnection: ObservableObject {
     // MARK: - Authentication
 
     func sendAuthRequest(password: String) {
+        Log.connection.debug("Sending auth request for device \(DeviceIdentity.deviceName)")
         lastPassword = password
         let request = AuthRequest(
             password: password,
@@ -271,6 +275,7 @@ final class ClientConnection: ObservableObject {
     // MARK: - Receiving
 
     private func startReceiving() {
+        Log.connection.debug("Receive loop started")
         connection?.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
             guard let self = self else { return }
 
@@ -302,23 +307,39 @@ final class ClientConnection: ObservableObject {
         }
     }
 
+    private var videoFrameCount = 0
+
     private func handleFrame(_ frame: ProtocolFrame) {
         switch frame.type {
         case .authResult:
+            Log.connection.info("Received: authResult")
             handleAuthResult(frame)
         case .heartbeat:
             sendFrame(.heartbeat)
         case .pong:
-            // RTT measurement response.
             if let payload = try? MessageCodec.decodePayload(PingPayload.self, from: frame) {
                 qualityMonitor.receivedPong(payload: payload)
             }
+        case .videoFrame:
+            videoFrameCount += 1
+            if videoFrameCount <= 3 || videoFrameCount % 100 == 0 {
+                Log.connection.debug("Received: videoFrame #\(self.videoFrameCount) (\(frame.payload.count)B)")
+            }
+            onFrameReceived?(frame)
+        case .videoConfig:
+            Log.connection.info("Received: videoConfig (\(frame.payload.count)B)")
+            onFrameReceived?(frame)
+        case .configUpdate:
+            Log.connection.info("Received: configUpdate")
+            onFrameReceived?(frame)
         case .disconnect:
+            Log.connection.info("Received: disconnect")
             DispatchQueue.main.async { [weak self] in
                 self?.state = .disconnected
                 self?.sessionToken = nil
             }
         default:
+            Log.connection.debug("Received: unknown type \(frame.type.rawValue)")
             onFrameReceived?(frame)
         }
     }
@@ -326,6 +347,7 @@ final class ClientConnection: ObservableObject {
     private func handleAuthResult(_ frame: ProtocolFrame) {
         do {
             let result = try MessageCodec.decodePayload(AuthResult.self, from: frame)
+            Log.connection.debug("Auth result: success=\(result.success) reason=\(result.reason ?? "none")")
             DispatchQueue.main.async { [weak self] in
                 if result.success, let token = result.sessionToken {
                     Log.connection.info("Authenticated — session started")
