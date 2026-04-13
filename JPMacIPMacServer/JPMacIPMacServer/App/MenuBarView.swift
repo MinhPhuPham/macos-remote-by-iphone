@@ -4,9 +4,15 @@ import SwiftUI
 struct MenuBarView: View {
 
     @ObservedObject var server: ServerManager
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let pending = server.pendingApproval {
+                approvalSection(pending)
+                Divider()
+            }
+
             statusSection
 
             Divider()
@@ -21,6 +27,49 @@ struct MenuBarView: View {
             }
             .keyboardShortcut("q")
         }
+    }
+
+    // MARK: - Approval
+
+    private func approvalSection(_ pending: ServerManager.PendingApproval) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "person.badge.shield.checkmark")
+                    .foregroundStyle(.orange)
+                Text("Connection Request")
+                    .font(.subheadline.bold())
+            }
+
+            Text("\"\(pending.deviceName)\" (\(pending.clientIP)) wants to connect.")
+                .font(.caption)
+
+            Text("This device will see your screen and control mouse & keyboard.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                Button("Allow Once") {
+                    server.approveConnection(trustPermanently: false)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+                .controlSize(.small)
+
+                Button("Always Allow") {
+                    server.approveConnection(trustPermanently: true)
+                }
+                .controlSize(.small)
+
+                Button("Deny") {
+                    server.denyConnection()
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Sections
@@ -83,6 +132,12 @@ struct MenuBarView: View {
                 Button("Start Server") {
                     server.start()
                 }
+            }
+
+            Divider()
+
+            Button("Open Setup Guide...") {
+                openWindow(id: "onboarding")
             }
 
             SettingsLink {

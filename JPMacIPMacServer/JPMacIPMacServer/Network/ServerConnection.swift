@@ -4,8 +4,6 @@ import JPMacIPRemoteShared
 import Network
 import os
 
-private let logger = Logger(subsystem: "com.myremote.server", category: "ServerConnection")
-
 /// Manages a single client connection on the server side.
 final class ServerConnection: ObservableObject {
 
@@ -70,7 +68,7 @@ final class ServerConnection: ObservableObject {
         let data = frame.encode()
         connection.send(content: data, completion: .contentProcessed { error in
             if let error = error {
-                logger.warning("Send error: \(error.localizedDescription)")
+                Log.connection.warning("Send error: \(error.localizedDescription)")
             }
         })
     }
@@ -84,11 +82,11 @@ final class ServerConnection: ObservableObject {
             let data = try MessageCodec.encode(type, payload: payload)
             connection.send(content: data, completion: .contentProcessed { error in
                 if let error = error {
-                    logger.warning("Send error: \(error.localizedDescription)")
+                    Log.connection.warning("Send error: \(error.localizedDescription)")
                 }
             })
         } catch {
-            logger.error("Encoding error: \(error.localizedDescription)")
+            Log.connection.error("Encoding error: \(error.localizedDescription)")
         }
     }
 
@@ -100,7 +98,7 @@ final class ServerConnection: ObservableObject {
 
             if let data = data, !data.isEmpty {
                 guard self.codec.append(data) else {
-                    logger.warning("Buffer overflow — disconnecting client \(self.remoteAddress)")
+                    Log.connection.warning("Buffer overflow — disconnecting client \(self.remoteAddress)")
                     self.disconnect()
                     return
                 }
@@ -150,7 +148,7 @@ final class ServerConnection: ObservableObject {
     private func checkSessionTimeout() {
         let elapsed = Date().timeIntervalSince(lastActivityDate)
         if elapsed > MyRemoteConstants.sessionTimeoutInterval {
-            logger.info("Session timeout, disconnecting.")
+            Log.connection.info("Session timeout, disconnecting.")
             disconnect()
         }
     }
@@ -164,7 +162,7 @@ final class ServerConnection: ObservableObject {
         timer.setEventHandler { [weak self] in
             guard let self = self else { return }
             if !self.isAuthenticated {
-                logger.info("Auth timeout — disconnecting unauthenticated client \(self.remoteAddress)")
+                Log.connection.info("Auth timeout — disconnecting unauthenticated client \(self.remoteAddress)")
                 self.disconnect()
             }
         }

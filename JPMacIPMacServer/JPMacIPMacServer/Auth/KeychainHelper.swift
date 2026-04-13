@@ -5,7 +5,7 @@ import Security
 /// Secure password storage and retrieval using the macOS Keychain.
 final class KeychainHelper {
 
-    private static let serviceName = "com.myremote.server"
+    private static let serviceName = AppConstants.keychainService
     private static let passwordAccount = "server-password"
 
     // MARK: - Password

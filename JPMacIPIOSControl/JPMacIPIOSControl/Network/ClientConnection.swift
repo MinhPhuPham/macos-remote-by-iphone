@@ -4,8 +4,6 @@ import JPMacIPRemoteShared
 import Network
 import os
 
-private let logger = Logger(subsystem: "com.myremote.client", category: "ClientConnection")
-
 /// Connection state for the iOS client.
 enum ConnectionState: Equatable {
     case disconnected
@@ -65,28 +63,17 @@ final class ClientConnection: ObservableObject {
     }
 
     private func startConnection(to endpoint: NWEndpoint) {
+        Log.connection.info("Connecting to \(endpoint.debugDescription)")
         state = .connecting
         codec.reset()
 
-        let tlsOptions = NWProtocolTLS.Options()
-        sec_protocol_options_set_verify_block(
-            tlsOptions.securityProtocolOptions,
-            { _, trust, completionHandler in
-                // TODO: Implement trust-on-first-use certificate pinning.
-                completionHandler(true)
-            },
-            .main
-        )
-        sec_protocol_options_set_min_tls_protocol_version(
-            tlsOptions.securityProtocolOptions,
-            .TLSv13
-        )
-
+        // Use plain TCP to match the server (which starts without a TLS identity).
+        // TODO: Add TLS when self-signed certificate generation is implemented.
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.enableKeepalive = true
         tcpOptions.keepaliveIdle = connectionMode == .wan ? 15 : 30
 
-        let parameters = NWParameters(tls: tlsOptions, tcp: tcpOptions)
+        let parameters = NWParameters(tls: nil, tcp: tcpOptions)
         let conn = NWConnection(to: endpoint, using: parameters)
 
         conn.stateUpdateHandler = { [weak self] connState in
@@ -94,6 +81,7 @@ final class ClientConnection: ObservableObject {
                 guard let self = self else { return }
                 switch connState {
                 case .ready:
+                    Log.connection.info("TCP connection ready — authenticating")
                     self.state = .authenticating
                     self.reconnectAttempt = 0
                     self.startReceiving()
@@ -102,10 +90,11 @@ final class ClientConnection: ObservableObject {
                 case .failed(let error):
                     self.handleConnectionFailure(error)
                 case .cancelled:
+                    Log.connection.info("Disconnected")
                     self.state = .disconnected
                 case .waiting(let error):
                     // Network path not available (e.g., no connectivity).
-                    logger.info("Connection waiting: \(error.localizedDescription)")
+                    Log.connection.info("Connection waiting: \(error.localizedDescription)")
                 default:
                     break
                 }
@@ -114,7 +103,7 @@ final class ClientConnection: ObservableObject {
 
         // Monitor network path changes (WiFi ↔ cellular transitions).
         conn.pathUpdateHandler = { path in
-            logger.info("Network path updated: \(path.debugDescription)")
+            Log.connection.info("Network path updated: \(path.debugDescription)")
         }
 
         conn.start(queue: .global(qos: .userInteractive))
@@ -166,7 +155,7 @@ final class ClientConnection: ObservableObject {
     private func sendRaw(data: Data) {
         connection?.send(content: data, completion: .contentProcessed { error in
             if let error = error {
-                logger.warning("Send error: \(error.localizedDescription)")
+                Log.connection.warning("Send error: \(error.localizedDescription)")
             }
         })
     }
@@ -181,7 +170,7 @@ final class ClientConnection: ObservableObject {
             let data = try MessageCodec.encode(type, payload: payload)
             sendRaw(data: data)
         } catch {
-            logger.error("Encoding error: \(error.localizedDescription)")
+            Log.connection.error("Encoding error: \(error.localizedDescription)")
         }
     }
 
@@ -254,7 +243,7 @@ final class ClientConnection: ObservableObject {
 
         let delay = MyRemoteConstants.reconnectBaseDelay * pow(2.0, Double(reconnectAttempt - 1))
         let cappedDelay = min(delay, 30.0) // Cap at 30 seconds.
-        logger.info("Reconnecting in \(Int(cappedDelay))s (attempt \(self.reconnectAttempt)/\(MyRemoteConstants.maxReconnectRetries))")
+        Log.connection.info("Reconnecting in \(Int(cappedDelay))s (attempt \(self.reconnectAttempt)/\(MyRemoteConstants.maxReconnectRetries))")
 
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + cappedDelay)
@@ -288,7 +277,7 @@ final class ClientConnection: ObservableObject {
 
             if let data = data, !data.isEmpty {
                 guard self.codec.append(data) else {
-                    logger.warning("Buffer overflow — disconnecting")
+                    Log.connection.warning("Buffer overflow — disconnecting")
                     self.disconnect()
                     return
                 }
@@ -340,6 +329,7 @@ final class ClientConnection: ObservableObject {
             let result = try MessageCodec.decodePayload(AuthResult.self, from: frame)
             DispatchQueue.main.async { [weak self] in
                 if result.success, let token = result.sessionToken {
+                    Log.connection.info("Authenticated — session started")
                     self?.sessionToken = token
                     self?.state = .connected
                 } else {

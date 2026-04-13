@@ -3,8 +3,6 @@ import Foundation
 import JPMacIPRemoteShared
 import os
 
-private let logger = Logger(subsystem: "com.myremote.client", category: "Pairing")
-
 /// Looks up a pairing code on the signaling server to get the Mac's public IP.
 final class PairingCodeLookup: ObservableObject {
 
@@ -42,7 +40,7 @@ final class PairingCodeLookup: ObservableObject {
 
                 if let error = error {
                     self.errorMessage = "Cannot reach signaling server: \(error.localizedDescription)"
-                    logger.error("Lookup failed: \(error.localizedDescription)")
+                    Log.pairing.error("Lookup failed: \(error.localizedDescription)")
                     return
                 }
 
@@ -56,7 +54,7 @@ final class PairingCodeLookup: ObservableObject {
                     if lookupResult.found {
                         self.result = lookupResult
                         self.errorMessage = nil
-                        logger.info("Found Mac at \(lookupResult.publicIP ?? "?"):\(lookupResult.port ?? 0)")
+                        Log.pairing.info("Found Mac at \(lookupResult.publicIP ?? "?"):\(lookupResult.port ?? 0)")
                     } else {
                         self.errorMessage = lookupResult.error ?? "Code not found. Check the code on your Mac."
                     }

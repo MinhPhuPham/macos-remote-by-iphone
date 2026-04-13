@@ -3,10 +3,10 @@ import Foundation
 import JPMacIPRemoteShared
 import Network
 import os
+import Security
 
-private let logger = Logger(subsystem: "com.myremote.server", category: "Bonjour")
-
-/// Advertises the MyRemote server via Bonjour and accepts incoming TLS connections.
+/// Advertises the MyRemote server via Bonjour and accepts incoming TCP connections.
+/// Uses plain TCP for now (TLS requires a valid identity from the Keychain).
 final class BonjourAdvertiser: ObservableObject {
 
     @Published private(set) var isListening = false
@@ -26,7 +26,34 @@ final class BonjourAdvertiser: ObservableObject {
 
     func start(tlsIdentity: SecIdentity?) {
         do {
-            let parameters = createParameters(identity: tlsIdentity)
+            let parameters: NWParameters
+
+            if let identity = tlsIdentity, let secIdentity = sec_identity_create(identity) {
+                // Use TLS with the provided identity.
+                let tlsOptions = NWProtocolTLS.Options()
+                sec_protocol_options_set_local_identity(
+                    tlsOptions.securityProtocolOptions,
+                    secIdentity
+                )
+                sec_protocol_options_set_min_tls_protocol_version(
+                    tlsOptions.securityProtocolOptions,
+                    .TLSv13
+                )
+                let tcpOptions = NWProtocolTCP.Options()
+                tcpOptions.enableKeepalive = true
+                tcpOptions.keepaliveIdle = 30
+                parameters = NWParameters(tls: tlsOptions, tcp: tcpOptions)
+                Log.bonjour.info("Starting listener with TLS")
+            } else {
+                // Fall back to plain TCP — connections still work, just unencrypted.
+                // This is acceptable for local WiFi during development.
+                let tcpOptions = NWProtocolTCP.Options()
+                tcpOptions.enableKeepalive = true
+                tcpOptions.keepaliveIdle = 30
+                parameters = NWParameters(tls: nil, tcp: tcpOptions)
+                Log.bonjour.info("Starting listener with plain TCP (no TLS identity)")
+            }
+
             guard let nwPort = NWEndpoint.Port(rawValue: port) else {
                 errorMessage = "Invalid port: \(port)"
                 return
@@ -49,9 +76,11 @@ final class BonjourAdvertiser: ObservableObject {
                 case .ready:
                     self?.isListening = true
                     self?.errorMessage = nil
+                    Log.bonjour.info("Server listening on port \(self?.port ?? 0)")
                 case .failed(let error):
                     self?.isListening = false
                     self?.errorMessage = "Listener failed: \(error.localizedDescription)"
+                    Log.bonjour.error("Listener failed: \(error.localizedDescription)")
                 case .cancelled:
                     self?.isListening = false
                 default:
@@ -61,6 +90,7 @@ final class BonjourAdvertiser: ObservableObject {
         }
 
         listener?.newConnectionHandler = { [weak self] connection in
+            Log.bonjour.info("New incoming connection from \(connection.endpoint.debugDescription)")
             self?.onNewConnection?(connection)
         }
 
@@ -72,27 +102,5 @@ final class BonjourAdvertiser: ObservableObject {
         listener = nil
         isListening = false
     }
-
-    // MARK: - TLS Parameters
-
-    private func createParameters(identity: SecIdentity?) -> NWParameters {
-        let tlsOptions = NWProtocolTLS.Options()
-
-        if let identity = identity, let secIdentity = sec_identity_create(identity) {
-            sec_protocol_options_set_local_identity(
-                tlsOptions.securityProtocolOptions,
-                secIdentity
-            )
-            sec_protocol_options_set_min_tls_protocol_version(
-                tlsOptions.securityProtocolOptions,
-                .TLSv13
-            )
-        }
-
-        let tcpOptions = NWProtocolTCP.Options()
-        tcpOptions.enableKeepalive = true
-        tcpOptions.keepaliveIdle = 30
-
-        return NWParameters(tls: tlsOptions, tcp: tcpOptions)
-    }
 }
+

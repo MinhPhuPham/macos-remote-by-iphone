@@ -1,10 +1,8 @@
-import Foundation
-import VideoToolbox
 import CoreMedia
 import CoreVideo
+import Foundation
 import os
-
-private let logger = Logger(subsystem: "com.myremote.client", category: "VideoDecoder")
+import VideoToolbox
 
 /// H.264 hardware decoder using VideoToolbox.
 /// Receives SPS/PPS config and NAL units, outputs CVPixelBuffers.
@@ -16,7 +14,7 @@ final class VideoDecoder {
 
     private var session: VTDecompressionSession?
     private var formatDescription: CMVideoFormatDescription?
-    private let queue = DispatchQueue(label: "com.myremote.videodecoder")
+    private let queue = DispatchQueue(label: "\(AppConstants.queuePrefix).videodecoder")
 
     // MARK: - Configuration
 
@@ -85,7 +83,7 @@ final class VideoDecoder {
                 blockBufferOut: &blockBuffer
             )
             guard status == kCMBlockBufferNoErr, let buffer = blockBuffer else {
-                logger.warning("Failed to create block buffer: \(status)")
+                Log.video.warning("Failed to create block buffer: \(status)")
                 return
             }
 
@@ -100,7 +98,7 @@ final class VideoDecoder {
                 )
             }
             guard status == kCMBlockBufferNoErr else {
-                logger.warning("Failed to copy NAL data: \(status)")
+                Log.video.warning("Failed to copy NAL data: \(status)")
                 return
             }
 
@@ -125,7 +123,7 @@ final class VideoDecoder {
             )
 
             guard sampleStatus == noErr, let sample = sampleBuffer else {
-                logger.warning("Failed to create sample buffer: \(sampleStatus)")
+                Log.video.warning("Failed to create sample buffer: \(sampleStatus)")
                 return
             }
 
@@ -143,7 +141,7 @@ final class VideoDecoder {
             }
 
             if decodeStatus != noErr {
-                logger.warning("Decode frame failed: \(decodeStatus)")
+                Log.video.warning("Decode frame failed: \(decodeStatus)")
             }
         }
     }

@@ -8,7 +8,7 @@ import UIKit
 /// The UUID is stored securely in the Keychain (not UserDefaults).
 enum DeviceIdentity {
 
-    private static let service = "com.myremote.client"
+    private static let service = AppConstants.keychainService
     private static let uuidAccount = "device-uuid"
 
     /// The persistent device UUID. Generated once on first access, stored in Keychain.

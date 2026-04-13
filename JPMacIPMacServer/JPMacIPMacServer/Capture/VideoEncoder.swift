@@ -1,10 +1,8 @@
-import Foundation
-import VideoToolbox
 import CoreMedia
-import os
+import Foundation
 import JPMacIPRemoteShared
-
-private let logger = Logger(subsystem: "com.myremote.server", category: "VideoEncoder")
+import os
+import VideoToolbox
 
 /// H.264 hardware encoder using VideoToolbox.
 /// Encodes CVPixelBuffer frames and outputs NAL units ready for network transmission.
@@ -108,7 +106,7 @@ final class VideoEncoder {
         }
 
         if status != noErr {
-            logger.warning("Encode error: \(status)")
+            Log.encoder.warning("Encode error: \(status)")
         }
     }
 

@@ -3,8 +3,6 @@ import Foundation
 import JPMacIPRemoteShared
 import os
 
-private let logger = Logger(subsystem: "com.myremote.server", category: "AuthManager")
-
 /// Manages server-side authentication: password validation, brute-force protection,
 /// session tokens, and the user confirmation flow.
 final class AuthManager: ObservableObject {
@@ -121,10 +119,10 @@ final class AuthManager: ObservableObject {
         globalFailureCount += 1
         if globalFailureCount >= 20 {
             isGloballyLocked = true
-            logger.warning("Global auth lockout triggered: \(self.globalFailureCount) failures in window")
+            Log.auth.warning("Global auth lockout triggered: \(self.globalFailureCount) failures in window")
         }
 
-        logger.info("Failed auth: IP=\(ip) UUID=\(deviceUUID) IP_count=\(ipRecord.count) UUID_count=\(uuidRecord.count) global=\(self.globalFailureCount)")
+        Log.auth.info("Failed auth: IP=\(ip) UUID=\(deviceUUID) IP_count=\(ipRecord.count) UUID_count=\(uuidRecord.count) global=\(self.globalFailureCount)")
     }
 
     /// Clear failed attempts for a successful auth.
@@ -166,7 +164,7 @@ final class AuthManager: ObservableObject {
 
     func createSession(deviceName: String) -> String? {
         guard let token = try? KeychainHelper.generateSessionToken() else {
-            logger.error("Failed to generate session token")
+            Log.auth.error("Failed to generate session token")
             return nil
         }
         currentSessionToken = token

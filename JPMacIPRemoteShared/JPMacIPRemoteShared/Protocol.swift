@@ -50,7 +50,7 @@ public struct ProtocolFrame: Sendable {
         guard data.count >= 5 else { return nil }
         let typeByte = data[data.startIndex]
         let lengthSlice = data[(data.startIndex + 1)..<(data.startIndex + 5)]
-        let length = lengthSlice.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+        let length = lengthSlice.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).bigEndian }
         let payloadLength = Int(length)
         let totalLength = 5 + payloadLength
 

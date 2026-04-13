@@ -49,9 +49,9 @@ public enum MyRemoteConstants {
     /// LAN-optimized settings.
     public enum LAN {
         public static let heartbeatInterval: TimeInterval = 5.0
-        public static let defaultBitrate: Int = 4_000_000
-        public static let lowBitrate: Int = 2_000_000
-        public static let highBitrate: Int = 6_000_000
+        public static let defaultBitrate: Int = 8_000_000
+        public static let lowBitrate: Int = 4_000_000
+        public static let highBitrate: Int = 12_000_000
         public static let defaultFrameRate: Int = 30
         public static let lowFrameRate: Int = 15
         public static let highRTTThreshold: Double = 100

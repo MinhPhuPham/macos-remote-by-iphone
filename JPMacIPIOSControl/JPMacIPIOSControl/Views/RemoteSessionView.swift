@@ -4,12 +4,9 @@ import JPMacIPRemoteShared
 import os
 import SwiftUI
 
-private let logger = Logger(subsystem: "com.myremote.client", category: "RemoteSession")
+// MARK: - Session Pipeline
 
-// MARK: - Session Pipeline Coordinator
-
-/// Owns the video pipeline and gesture handler as a single `ObservableObject`.
-/// Using `@StateObject` ensures stable identity across SwiftUI view updates.
+/// Owns video decode + display objects. Only `fps` is @Published to minimize SwiftUI diffs.
 final class SessionPipeline: ObservableObject {
 
     var displayView: VideoDisplayUIView?
@@ -20,24 +17,24 @@ final class SessionPipeline: ObservableObject {
     @Published private(set) var fps: Int = 0
     private var frameCount: Int = 0
     private var lastFPSUpdate = Date()
+    /// Monotonically increasing timestamp for AVSampleBufferDisplayLayer.
+    var nextPTS: Int64 = 0
 
-    func updateFPS() {
+    func countFrame() {
         frameCount += 1
         let now = Date()
-        let elapsed = now.timeIntervalSince(lastFPSUpdate)
-        if elapsed >= 1.0 {
+        if now.timeIntervalSince(lastFPSUpdate) >= 1.0 {
             let newFPS = frameCount
             frameCount = 0
             lastFPSUpdate = now
-            // Only publish when value changes to avoid unnecessary SwiftUI diffs.
-            if newFPS != fps {
-                fps = newFPS
-            }
+            if newFPS != fps { fps = newFPS }
         }
     }
 
     func reset() {
         videoDecoder.invalidate()
+        displayView?.flush()
+        displayView = nil
         frameCount = 0
         fps = 0
     }
@@ -45,7 +42,6 @@ final class SessionPipeline: ObservableObject {
 
 // MARK: - Remote Session View
 
-/// Full-screen remote session view: video display + gesture input + toolbar.
 struct RemoteSessionView: View {
 
     @ObservedObject var connection: ClientConnection
@@ -53,76 +49,163 @@ struct RemoteSessionView: View {
 
     @State private var activeModifiers = ModifierKeys()
     @State private var isKeyboardActive = false
-    @State private var showStatusBar = true
+    @State private var showControls = true
+    @State private var keyboardHeight: CGFloat = 0
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
+            // Video layer — full screen, behind everything.
             Color.black.ignoresSafeArea()
 
-            videoLayer
+            VideoDisplayView { view in
+                pipeline.displayView = view
+                pipeline.gestureHandler.attach(to: view)
+                wireGestures()
+                Log.session.info("Video display ready: \(Int(view.bounds.width))x\(Int(view.bounds.height))")
+            }
+            .ignoresSafeArea()
 
-            overlayControls
+            // Controls overlay
+            VStack(spacing: 0) {
+                if showControls {
+                    topBar
+                }
+
+                Spacer()
+
+                if showControls {
+                    bottomBar
+                }
+            }
+            .padding(.bottom, keyboardHeight)
         }
-        .onAppear { startVideoReceiver() }
+        .ignoresSafeArea(.container)
+        .onAppear { wireVideoPipeline() }
         .onDisappear { cleanup() }
         .statusBarHidden()
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Remote desktop session")
-    }
-
-    // MARK: - Subviews
-
-    private var videoLayer: some View {
-        VideoDisplayView { createdView in
-            pipeline.displayView = createdView
-            setupGestures(on: createdView)
-        }
-        .ignoresSafeArea()
-    }
-
-    private var overlayControls: some View {
-        VStack(spacing: 0) {
-            if showStatusBar {
-                ConnectionStatusBar(
-                    fps: pipeline.fps,
-                    isConnected: connection.state == .connected,
-                    rtt: connection.qualityMonitor.averageRTT,
-                    qualityLevel: connection.qualityMonitor.qualityLevel,
-                    connectionMode: connection.connectionMode
-                )
+        .persistentSystemOverlays(.hidden)
+        .onReceive(keyboardPublisher) { height in
+            withAnimation(.easeOut(duration: 0.25)) {
+                keyboardHeight = height
             }
+        }
+    }
+
+    // MARK: - Keyboard Publisher
+
+    private var keyboardPublisher: AnyPublisher<CGFloat, Never> {
+        let willShow = NotificationCenter.default
+            .publisher(for: UIResponder.keyboardWillShowNotification)
+            .map { notification -> CGFloat in
+                (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.height ?? 0
+            }
+
+        let willHide = NotificationCenter.default
+            .publisher(for: UIResponder.keyboardWillHideNotification)
+            .map { _ -> CGFloat in 0 }
+
+        return Publishers.Merge(willShow, willHide)
+            .eraseToAnyPublisher()
+    }
+
+    // MARK: - Top Bar
+
+    private var topBar: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(connection.state == .connected ? Color.green : Color.red)
+                .frame(width: 6, height: 6)
+
+            Text("\(pipeline.fps) FPS")
+                .font(.caption2.monospacedDigit())
 
             Spacer()
 
+            Button {
+                showControls = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    showControls = true
+                }
+            } label: {
+                Image(systemName: "eye.slash")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(.black.opacity(0.5))
+    }
+
+    // MARK: - Bottom Bar
+
+    private var bottomBar: some View {
+        VStack(spacing: 0) {
+            // Hidden text field to capture keyboard input.
             if isKeyboardActive {
                 VirtualKeyboardView(isActive: $isKeyboardActive) { char, keyCode, _ in
                     sendKeyEvent(keyCode: keyCode, character: char)
                 }
-                .frame(height: 1)
+                .frame(width: 1, height: 1)
+                .opacity(0.01)
             }
 
-            ModifierKeysBar(activeModifiers: $activeModifiers) {
-                isKeyboardActive.toggle()
-            }
+            HStack(spacing: 12) {
+                modifierButton("\u{2318}", modifier: .command)
+                modifierButton("\u{2325}", modifier: .option)
+                modifierButton("\u{2303}", modifier: .control)
+                modifierButton("\u{21E7}", modifier: .shift)
 
-            ToolbarView(
-                isKeyboardActive: $isKeyboardActive,
-                showStatusBar: $showStatusBar,
-                onDisconnect: { connection.disconnect() }
-            )
+                Divider().frame(height: 20)
+
+                Button { isKeyboardActive.toggle() } label: {
+                    Image(systemName: isKeyboardActive ? "keyboard.fill" : "keyboard")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                }
+
+                Spacer()
+
+                Button { connection.disconnect() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.red)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(.black.opacity(0.5))
         }
+    }
+
+    private func modifierButton(_ label: String, modifier: ModifierKeys) -> some View {
+        let isActive = activeModifiers.contains(modifier)
+        return Button {
+            if isActive { activeModifiers.remove(modifier) }
+            else { activeModifiers.insert(modifier) }
+        } label: {
+            Text(label)
+                .font(.title3)
+                .frame(width: 36, height: 36)
+                .background(isActive ? Color.accentColor : Color.white.opacity(0.15),
+                             in: RoundedRectangle(cornerRadius: 6))
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Video Pipeline
 
-    private func startVideoReceiver() {
+    private func wireVideoPipeline() {
         pipeline.videoDecoder.onDecodedFrame = { [weak pipeline] pixelBuffer, timestamp in
             guard let pipeline = pipeline else { return }
-            if let sampleBuffer = pipeline.sampleBufferFactory.create(from: pixelBuffer, presentationTime: timestamp) {
-                DispatchQueue.main.async { [weak pipeline] in
-                    pipeline?.displayView?.enqueue(sampleBuffer)
-                    pipeline?.updateFPS()
-                }
+            guard let sampleBuffer = pipeline.sampleBufferFactory.create(
+                from: pixelBuffer, presentationTime: timestamp
+            ) else { return }
+            DispatchQueue.main.async { [weak pipeline] in
+                pipeline?.displayView?.enqueue(sampleBuffer)
+                pipeline?.countFrame()
             }
         }
 
@@ -130,21 +213,27 @@ struct RemoteSessionView: View {
             guard let pipeline = pipeline else { return }
             switch frame.type {
             case .videoConfig:
-                handleVideoConfig(frame, pipeline: pipeline)
+                Self.handleVideoConfig(frame, pipeline: pipeline)
             case .videoFrame:
-                pipeline.videoDecoder.decode(nalData: frame.payload)
+                // Each frame needs a unique increasing timestamp or
+                // AVSampleBufferDisplayLayer silently drops them.
+                pipeline.nextPTS += 1
+                let pts = CMTime(value: pipeline.nextPTS, timescale: 30)
+                pipeline.videoDecoder.decode(nalData: frame.payload, presentationTime: pts)
             case .configUpdate:
-                handleConfigUpdate(frame, pipeline: pipeline)
+                Self.handleConfigUpdate(frame, pipeline: pipeline)
             default:
                 break
             }
         }
     }
 
-    private func handleVideoConfig(_ frame: ProtocolFrame, pipeline: SessionPipeline) {
+    private static func handleVideoConfig(_ frame: ProtocolFrame, pipeline: SessionPipeline) {
         let data = frame.payload
         guard data.count > 4 else { return }
-        let spsLength = Int(data[0..<4].withUnsafeBytes { $0.load(as: UInt32.self).bigEndian })
+        let spsLength = Int(data[0..<4].withUnsafeBytes {
+            $0.loadUnaligned(as: UInt32.self).bigEndian
+        })
         guard data.count >= 4 + spsLength else { return }
 
         let sps = data.subdata(in: 4..<(4 + spsLength))
@@ -152,14 +241,15 @@ struct RemoteSessionView: View {
 
         do {
             try pipeline.videoDecoder.configure(sps: sps, pps: pps)
+            Log.session.info("Decoder configured: SPS=\(sps.count)B PPS=\(pps.count)B")
         } catch {
-            logger.error("Failed to configure video decoder: \(error.localizedDescription)")
+            Log.session.error("Decoder config failed: \(error.localizedDescription)")
         }
     }
 
-    private func handleConfigUpdate(_ frame: ProtocolFrame, pipeline: SessionPipeline) {
+    private static func handleConfigUpdate(_ frame: ProtocolFrame, pipeline: SessionPipeline) {
         guard let config = try? MessageCodec.decodePayload(ConfigUpdate.self, from: frame) else { return }
-        // Dispatch to main thread — gestureHandler properties are read from main.
+        Log.session.info("Screen: \(config.screenWidth)x\(config.screenHeight) @\(config.fps)fps")
         DispatchQueue.main.async { [weak pipeline] in
             pipeline?.gestureHandler.serverScreenWidth = CGFloat(config.screenWidth)
             pipeline?.gestureHandler.serverScreenHeight = CGFloat(config.screenHeight)
@@ -168,20 +258,20 @@ struct RemoteSessionView: View {
 
     // MARK: - Gestures
 
-    private func setupGestures(on view: VideoDisplayUIView) {
+    private func wireGestures() {
         pipeline.gestureHandler.onMouseEvent = { [weak connection] type, point in
             guard let token = connection?.sessionToken else { return }
-            let event = MouseEvent(sessionToken: token, type: type, x: Double(point.x), y: Double(point.y))
-            connection?.sendJSON(.mouseEvent, payload: event)
+            connection?.sendJSON(.mouseEvent,
+                                 payload: MouseEvent(sessionToken: token, type: type,
+                                                     x: Double(point.x), y: Double(point.y)))
         }
 
         pipeline.gestureHandler.onScrollEvent = { [weak connection] deltaX, deltaY in
             guard let token = connection?.sessionToken else { return }
-            let event = ScrollEvent(sessionToken: token, deltaX: Double(deltaX), deltaY: Double(deltaY))
-            connection?.sendJSON(.scrollEvent, payload: event)
+            connection?.sendJSON(.scrollEvent,
+                                 payload: ScrollEvent(sessionToken: token,
+                                                      deltaX: Double(deltaX), deltaY: Double(deltaY)))
         }
-
-        pipeline.gestureHandler.attach(to: view)
     }
 
     // MARK: - Keyboard
@@ -194,12 +284,12 @@ struct RemoteSessionView: View {
             modifiers |= ModifierKeys.shift.rawValue
         }
 
-        let downEvent = KeyEvent(sessionToken: token, keyCode: keyCode, isDown: true, modifiers: modifiers)
-        connection.sendJSON(.keyEvent, payload: downEvent)
-
-        let upEvent = KeyEvent(sessionToken: token, keyCode: keyCode, isDown: false, modifiers: modifiers)
-        connection.sendJSON(.keyEvent, payload: upEvent)
-
+        connection.sendJSON(.keyEvent,
+                            payload: KeyEvent(sessionToken: token, keyCode: keyCode,
+                                              isDown: true, modifiers: modifiers))
+        connection.sendJSON(.keyEvent,
+                            payload: KeyEvent(sessionToken: token, keyCode: keyCode,
+                                              isDown: false, modifiers: modifiers))
         activeModifiers = ModifierKeys()
     }
 

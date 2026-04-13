@@ -7,14 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		4B98B8C62F8CED33001C7199 /* JPMacIPRemoteShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4B98B8C52F8CED2F001C7199 /* JPMacIPRemoteShared.framework */; };
-		4B98B8C72F8CED33001C7199 /* JPMacIPRemoteShared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 4B98B8C52F8CED2F001C7199 /* JPMacIPRemoteShared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		4B98BA292F8CFC46001C7199 /* JPMacIPRemoteShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4B98BA282F8CFC42001C7199 /* JPMacIPRemoteShared.framework */; };
+		4B98BA2A2F8CFC46001C7199 /* JPMacIPRemoteShared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 4B98BA282F8CFC42001C7199 /* JPMacIPRemoteShared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		4B98B8C42F8CED2F001C7199 /* PBXContainerItemProxy */ = {
+		4B98BA272F8CFC42001C7199 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 4B98B8C02F8CED2F001C7199 /* JPMacIPRemoteShared.xcodeproj */;
+			containerPortal = 4B98BA172F8CFC42001C7199 /* JPMacIPRemoteShared.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = 4B98B5C62F8CE0B3001C7199;
 			remoteInfo = JPMacIPRemoteShared;
@@ -22,13 +22,13 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		4B98B8C82F8CED33001C7199 /* Embed Frameworks */ = {
+		4B98BA2B2F8CFC46001C7199 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				4B98B8C72F8CED33001C7199 /* JPMacIPRemoteShared.framework in Embed Frameworks */,
+				4B98BA2A2F8CFC46001C7199 /* JPMacIPRemoteShared.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -37,7 +37,7 @@
 
 /* Begin PBXFileReference section */
 		4B98B3F72F8B5857001C7199 /* JPMacIPIOSControl.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JPMacIPIOSControl.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		4B98B8C02F8CED2F001C7199 /* JPMacIPRemoteShared.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = JPMacIPRemoteShared.xcodeproj; path = ../JPMacIPRemoteShared/JPMacIPRemoteShared.xcodeproj; sourceTree = "<group>"; };
+		4B98BA172F8CFC42001C7199 /* JPMacIPRemoteShared.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = JPMacIPRemoteShared.xcodeproj; path = ../JPMacIPRemoteShared/JPMacIPRemoteShared.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -53,7 +53,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4B98B8C62F8CED33001C7199 /* JPMacIPRemoteShared.framework in Frameworks */,
+				4B98BA292F8CFC46001C7199 /* JPMacIPRemoteShared.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -64,7 +64,7 @@
 			isa = PBXGroup;
 			children = (
 				4B98B3F92F8B5857001C7199 /* JPMacIPIOSControl */,
-				4B98B8BF2F8CED2F001C7199 /* Frameworks */,
+				4B98BA162F8CFC42001C7199 /* Frameworks */,
 				4B98B3F82F8B5857001C7199 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -77,18 +77,18 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		4B98B8BF2F8CED2F001C7199 /* Frameworks */ = {
+		4B98BA162F8CFC42001C7199 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				4B98B8C02F8CED2F001C7199 /* JPMacIPRemoteShared.xcodeproj */,
+				4B98BA172F8CFC42001C7199 /* JPMacIPRemoteShared.xcodeproj */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		4B98B8C12F8CED2F001C7199 /* Products */ = {
+		4B98BA182F8CFC42001C7199 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				4B98B8C52F8CED2F001C7199 /* JPMacIPRemoteShared.framework */,
+				4B98BA282F8CFC42001C7199 /* JPMacIPRemoteShared.framework */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -103,7 +103,7 @@
 				4B98B3F32F8B5857001C7199 /* Sources */,
 				4B98B3F42F8B5857001C7199 /* Frameworks */,
 				4B98B3F52F8B5857001C7199 /* Resources */,
-				4B98B8C82F8CED33001C7199 /* Embed Frameworks */,
+				4B98BA2B2F8CFC46001C7199 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -148,8 +148,8 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = 4B98B8C12F8CED2F001C7199 /* Products */;
-					ProjectRef = 4B98B8C02F8CED2F001C7199 /* JPMacIPRemoteShared.xcodeproj */;
+					ProductGroup = 4B98BA182F8CFC42001C7199 /* Products */;
+					ProjectRef = 4B98BA172F8CFC42001C7199 /* JPMacIPRemoteShared.xcodeproj */;
 				},
 			);
 			projectRoot = "";
@@ -160,11 +160,11 @@
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
-		4B98B8C52F8CED2F001C7199 /* JPMacIPRemoteShared.framework */ = {
+		4B98BA282F8CFC42001C7199 /* JPMacIPRemoteShared.framework */ = {
 			isa = PBXReferenceProxy;
 			fileType = wrapper.framework;
 			path = JPMacIPRemoteShared.framework;
-			remoteRef = 4B98B8C42F8CED2F001C7199 /* PBXContainerItemProxy */;
+			remoteRef = 4B98BA272F8CFC42001C7199 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 /* End PBXReferenceProxy section */
@@ -316,7 +316,7 @@
 				DEVELOPMENT_TEAM = 99PF879H8X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSBonjourServices = _myremote._tcp;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "MyRemote needs local network access to find and connect to your Mac.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -351,7 +351,7 @@
 				DEVELOPMENT_TEAM = 99PF879H8X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSBonjourServices = _myremote._tcp;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "MyRemote needs local network access to find and connect to your Mac.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

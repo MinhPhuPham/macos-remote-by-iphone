@@ -3,10 +3,7 @@ import Combine
 import CoreMedia
 import Foundation
 import JPMacIPRemoteShared
-import os
 import ScreenCaptureKit
-
-private let logger = Logger(subsystem: "com.myremote.server", category: "ScreenCapture")
 
 /// Manages screen capture via ScreenCaptureKit.
 final class ScreenCaptureManager: NSObject, ObservableObject {
@@ -17,7 +14,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
     var onPixelBuffer: ((CVPixelBuffer, CMTime) -> Void)?
 
     private var stream: SCStream?
-    private let captureQueue = DispatchQueue(label: "com.myremote.capture", qos: .userInteractive)
+    private let captureQueue = DispatchQueue(label: "\(AppConstants.queuePrefix).capture", qos: .userInteractive)
 
     private(set) var displayWidth: Int = 0
     private(set) var displayHeight: Int = 0

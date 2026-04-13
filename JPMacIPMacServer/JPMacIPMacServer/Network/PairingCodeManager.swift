@@ -3,8 +3,6 @@ import Foundation
 import JPMacIPRemoteShared
 import os
 
-private let logger = Logger(subsystem: "com.myremote.server", category: "Pairing")
-
 /// Manages the pairing code lifecycle on the macOS server.
 /// Generates a code, registers it with the signaling server,
 /// and periodically refreshes the registration (keep-alive).
@@ -101,7 +99,7 @@ final class PairingCodeManager: ObservableObject {
                 if let error = error {
                     self.isRegistered = false
                     self.errorMessage = "Signaling server unreachable: \(error.localizedDescription)"
-                    logger.error("Registration failed: \(error.localizedDescription)")
+                    Log.pairing.error("Registration failed: \(error.localizedDescription)")
                     return
                 }
 
@@ -115,7 +113,7 @@ final class PairingCodeManager: ObservableObject {
                 self.isRegistered = true
                 self.errorMessage = nil
                 self.startRefreshTimer()
-                logger.info("Registered pairing code: \(self.formattedCode)")
+                Log.pairing.info("Registered pairing code: \(self.formattedCode)")
             }
         }.resume()
     }

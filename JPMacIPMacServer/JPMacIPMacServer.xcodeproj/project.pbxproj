@@ -7,14 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		4B98B71F2F8CE525001C7199 /* JPMacIPRemoteShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4B98B71E2F8CE520001C7199 /* JPMacIPRemoteShared.framework */; };
-		4B98B7202F8CE525001C7199 /* JPMacIPRemoteShared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 4B98B71E2F8CE520001C7199 /* JPMacIPRemoteShared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		4B98B9DF2F8CFABB001C7199 /* JPMacIPRemoteShared.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4B98B9DE2F8CFAB0001C7199 /* JPMacIPRemoteShared.framework */; };
+		4B98B9E02F8CFABB001C7199 /* JPMacIPRemoteShared.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 4B98B9DE2F8CFAB0001C7199 /* JPMacIPRemoteShared.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		4B98B71D2F8CE520001C7199 /* PBXContainerItemProxy */ = {
+		4B98B9DD2F8CFAB0001C7199 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 4B98B70D2F8CE520001C7199 /* JPMacIPRemoteShared.xcodeproj */;
+			containerPortal = 4B98B9D92F8CFAB0001C7199 /* JPMacIPRemoteShared.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = 4B98B5C62F8CE0B3001C7199;
 			remoteInfo = JPMacIPRemoteShared;
@@ -28,7 +28,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				4B98B7202F8CE525001C7199 /* JPMacIPRemoteShared.framework in Embed Frameworks */,
+				4B98B9E02F8CFABB001C7199 /* JPMacIPRemoteShared.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -37,7 +37,7 @@
 
 /* Begin PBXFileReference section */
 		4B98B3B52F8B5734001C7199 /* JPMacIPMacServer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JPMacIPMacServer.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		4B98B70D2F8CE520001C7199 /* JPMacIPRemoteShared.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = JPMacIPRemoteShared.xcodeproj; path = ../JPMacIPRemoteShared/JPMacIPRemoteShared.xcodeproj; sourceTree = "<group>"; };
+		4B98B9D92F8CFAB0001C7199 /* JPMacIPRemoteShared.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = JPMacIPRemoteShared.xcodeproj; path = ../JPMacIPRemoteShared/JPMacIPRemoteShared.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -53,7 +53,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4B98B71F2F8CE525001C7199 /* JPMacIPRemoteShared.framework in Frameworks */,
+				4B98B9DF2F8CFABB001C7199 /* JPMacIPRemoteShared.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -64,7 +64,7 @@
 			isa = PBXGroup;
 			children = (
 				4B98B3B72F8B5734001C7199 /* JPMacIPMacServer */,
-				4B98B70C2F8CE520001C7199 /* Frameworks */,
+				4B98B9D82F8CFAB0001C7199 /* Frameworks */,
 				4B98B3B62F8B5734001C7199 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -77,18 +77,18 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		4B98B70C2F8CE520001C7199 /* Frameworks */ = {
+		4B98B9D82F8CFAB0001C7199 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				4B98B70D2F8CE520001C7199 /* JPMacIPRemoteShared.xcodeproj */,
+				4B98B9D92F8CFAB0001C7199 /* JPMacIPRemoteShared.xcodeproj */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		4B98B70E2F8CE520001C7199 /* Products */ = {
+		4B98B9DA2F8CFAB0001C7199 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				4B98B71E2F8CE520001C7199 /* JPMacIPRemoteShared.framework */,
+				4B98B9DE2F8CFAB0001C7199 /* JPMacIPRemoteShared.framework */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -148,8 +148,8 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = 4B98B70E2F8CE520001C7199 /* Products */;
-					ProjectRef = 4B98B70D2F8CE520001C7199 /* JPMacIPRemoteShared.xcodeproj */;
+					ProductGroup = 4B98B9DA2F8CFAB0001C7199 /* Products */;
+					ProjectRef = 4B98B9D92F8CFAB0001C7199 /* JPMacIPRemoteShared.xcodeproj */;
 				},
 			);
 			projectRoot = "";
@@ -160,11 +160,11 @@
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
-		4B98B71E2F8CE520001C7199 /* JPMacIPRemoteShared.framework */ = {
+		4B98B9DE2F8CFAB0001C7199 /* JPMacIPRemoteShared.framework */ = {
 			isa = PBXReferenceProxy;
 			fileType = wrapper.framework;
 			path = JPMacIPRemoteShared.framework;
-			remoteRef = 4B98B71D2F8CE520001C7199 /* PBXContainerItemProxy */;
+			remoteRef = 4B98B9DD2F8CFAB0001C7199 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 /* End PBXReferenceProxy section */

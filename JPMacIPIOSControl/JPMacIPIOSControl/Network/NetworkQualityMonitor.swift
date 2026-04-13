@@ -3,8 +3,6 @@ import Foundation
 import JPMacIPRemoteShared
 import os
 
-private let logger = Logger(subsystem: "com.myremote.client", category: "NetworkQuality")
-
 /// Measures RTT via ping/pong and drives adaptive bitrate/FPS decisions.
 /// Sends periodic pings to the server, measures round-trip time,
 /// and recommends quality adjustments based on the connection mode.
@@ -119,7 +117,7 @@ final class NetworkQualityMonitor: ObservableObject {
         }
 
         if recommendedBitrate != oldBitrate || recommendedFPS != oldFPS {
-            logger.info("Quality change: \(self.qualityLevel.rawValue) — bitrate=\(self.recommendedBitrate), fps=\(self.recommendedFPS), RTT=\(Int(averageRTT))ms")
+            Log.quality.info("Quality change: \(self.qualityLevel.rawValue) — bitrate=\(self.recommendedBitrate), fps=\(self.recommendedFPS), RTT=\(Int(averageRTT))ms")
             onQualityChange?(recommendedBitrate, recommendedFPS)
         }
     }

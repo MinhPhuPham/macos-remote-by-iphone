@@ -9,10 +9,17 @@ struct MyRemoteServerApp: App {
     var body: some Scene {
         MenuBarExtra("MyRemote", systemImage: server.statusIcon) {
             MenuBarView(server: server)
+                .frame(width: 280)
         }
+        .menuBarExtraStyle(.window)
 
         Settings {
             SettingsView(server: server)
         }
+
+        Window("MyRemote Setup", id: "onboarding") {
+            OnboardingView(server: server)
+        }
+        .defaultSize(width: 500, height: 420)
     }
 }
