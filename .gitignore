@@ -1,0 +1,56 @@
+# ── macOS ──
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ── Xcode ──
+## Build generated
+build/
+DerivedData/
+
+## User-specific Xcode settings
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+
+## Xcode workspaces (shared schemes are ok, but user data is not)
+*.xcworkspace/xcuserdata/
+
+## Index / preview stores
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+## Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+## Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.resolved
+
+# ── Xcode project files (already in sub-projects) ──
+JPMacIPIOSControl/JPMacIPIOSControl.xcodeproj/xcuserdata/
+JPMacIPMacServer/JPMacIPMacServer.xcodeproj/xcuserdata/
+JPMacIPRemoteShared/JPMacIPRemoteShared.xcodeproj/xcuserdata/
+
+# ── Node.js (SignalingServer) ──
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Environment / Secrets ──
+.env
+.env.*
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*~
