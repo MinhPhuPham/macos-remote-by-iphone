@@ -61,13 +61,13 @@ struct MenuBarView: View {
                 Divider().padding(.vertical, 2)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    ipRow(label: "Local", value: "\(server.localIP):\(MyRemoteConstants.defaultPort)",
+                    ipRow(label: "ip_label_local", value: "\(server.localIP):\(MyRemoteConstants.defaultPort)",
                           icon: "wifi", color: .blue)
-                    ipRow(label: "Public", value: "\(server.publicIP):\(MyRemoteConstants.defaultPort)",
+                    ipRow(label: "ip_label_public", value: "\(server.publicIP):\(MyRemoteConstants.defaultPort)",
                           icon: "globe", color: .orange)
                 }
 
-                Text("Remote access requires port forwarding on your router.")
+                Text("remote_access_note")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .padding(.top, 2)
@@ -82,17 +82,17 @@ struct MenuBarView: View {
     private var controlsSection: some View {
         VStack(alignment: .leading, spacing: 2) {
             if server.isRunning {
-                menuButton("Stop Server", icon: "stop.fill", role: .destructive) {
+                menuButton("stop_server", icon: "stop.fill", role: .destructive) {
                     server.stop()
                 }
 
                 if server.connectedClient != nil {
-                    menuButton("Disconnect Client", icon: "xmark.circle") {
+                    menuButton("disconnect_client", icon: "xmark.circle") {
                         server.connectedClient?.disconnect()
                     }
                 }
             } else {
-                menuButton("Start Server", icon: "play.fill") {
+                menuButton("start_server", icon: "play.fill") {
                     server.start()
                 }
             }
@@ -101,7 +101,7 @@ struct MenuBarView: View {
 
             // Only show Setup Guide if permissions are missing.
             if !ScreenCaptureManager.hasPermission() || !MouseInjector.hasAccessibilityPermission() {
-                menuButton("Setup Guide...", icon: "questionmark.circle") {
+                menuButton("setup_guide", icon: "questionmark.circle") {
                     NSApp.setActivationPolicy(.regular)
                     openWindow(id: "onboarding")
                     DispatchQueue.main.async {
@@ -114,7 +114,7 @@ struct MenuBarView: View {
                 }
             }
 
-            menuButton("Settings...", icon: "gear") {
+            menuButton("settings_menu", icon: "gear") {
                 // openSettings() opens or brings the Settings window to front.
                 // But for LSUIElement apps it stays behind — force it.
                 NSApp.setActivationPolicy(.regular)
@@ -134,7 +134,7 @@ struct MenuBarView: View {
     // MARK: - Quit
 
     private var quitButton: some View {
-        menuButton("Quit MyRemote", icon: "power") {
+        menuButton("quit_app", icon: "power") {
             server.stop()
             NSApplication.shared.terminate(nil)
         }
@@ -143,7 +143,7 @@ struct MenuBarView: View {
 
     // MARK: - Helpers
 
-    private func menuButton(_ title: String, icon: String,
+    private func menuButton(_ title: LocalizedStringKey, icon: String,
                             role: ButtonRole? = nil,
                             action: @escaping () -> Void) -> some View {
         Button(role: role, action: action) {
@@ -156,12 +156,12 @@ struct MenuBarView: View {
         .padding(.vertical, 4)
     }
 
-    private func ipRow(label: String, value: String, icon: String, color: Color) -> some View {
+    private func ipRow(label: LocalizedStringKey, value: String, icon: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .foregroundStyle(color)
                 .frame(width: 14)
-            Text("\(label):")
+            Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 40, alignment: .trailing)

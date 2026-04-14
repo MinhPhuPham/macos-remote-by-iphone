@@ -25,10 +25,10 @@ struct ServerListView: View {
             ProgressView()
                 .scaleEffect(1.5)
 
-            Text("Searching for Mac...")
+            Text("searching_for_mac")
                 .font(.headline)
 
-            Text("Make sure MyRemote Server is running on your Mac\nand both devices are on the same WiFi network.")
+            Text("searching_hint")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -74,7 +74,7 @@ struct ServerListView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(names[server.id] ?? server.name)
                             .font(.headline)
-                        Text("Available")
+                        Text("server_available_label")
                             .font(.caption)
                             .foregroundStyle(.green)
                     }

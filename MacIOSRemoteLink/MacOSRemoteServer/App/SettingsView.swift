@@ -16,27 +16,27 @@ struct PermissionBanner: View {
     var body: some View {
         if !allGranted {
             VStack(alignment: .leading, spacing: 8) {
-                Label("Permissions Required", systemImage: "exclamationmark.triangle.fill")
+                Label("permissions_required", systemImage: "exclamationmark.triangle.fill")
                     .font(.subheadline.bold())
                     .foregroundStyle(.orange)
 
                 if !hasScreenRecording {
                     permissionItem(
-                        title: "Screen Recording",
-                        description: "Required to capture and stream your screen",
+                        title: "screen_recording_title",
+                        description: "screen_recording_required_desc",
                         action: onRequestScreenRecording
                     )
                 }
 
                 if !hasAccessibility {
                     permissionItem(
-                        title: "Accessibility",
-                        description: "Required to control mouse and keyboard",
+                        title: "accessibility_title",
+                        description: "accessibility_required_desc",
                         action: onRequestAccessibility
                     )
                 }
 
-                Text("Grant permissions in System Settings → Privacy & Security")
+                Text("grant_permissions_hint")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -45,14 +45,14 @@ struct PermissionBanner: View {
         }
     }
 
-    private func permissionItem(title: String, description: String, action: @escaping () -> Void) -> some View {
+    private func permissionItem(title: LocalizedStringKey, description: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.callout.bold())
                 Text(description).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Grant") { action() }
+            Button("grant_button") { action() }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
         }
@@ -71,7 +71,7 @@ struct ApprovalBanner: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Connection Request", systemImage: "person.badge.shield.checkmark")
+            Label("connection_request", systemImage: "person.badge.shield.checkmark")
                 .font(.subheadline.bold())
                 .foregroundStyle(.blue)
 
@@ -89,22 +89,22 @@ struct ApprovalBanner: View {
                 Spacer()
             }
 
-            Text("This device will see your screen and control mouse & keyboard.")
+            Text("connection_warning")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 8) {
-                Button("Allow Once", action: onApproveOnce)
+                Button("allow_once", action: onApproveOnce)
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
 
-                Button("Always Allow", action: onApproveAlways)
+                Button("always_allow", action: onApproveAlways)
                     .buttonStyle(.bordered)
                     .controlSize(.small)
 
                 Spacer()
 
-                Button("Deny", role: .destructive, action: onDeny)
+                Button("deny", role: .destructive, action: onDeny)
                     .controlSize(.small)
             }
         }
@@ -162,15 +162,15 @@ struct SettingsView: View {
 
             TabView(selection: $selectedTab) {
                 generalTab
-                    .tabItem { Label("General", systemImage: "gear") }
+                    .tabItem { Label("tab_general", systemImage: "gear") }
                     .tag("general")
 
                 securityTab
-                    .tabItem { Label("Security", systemImage: "lock.shield") }
+                    .tabItem { Label("tab_security", systemImage: "lock.shield") }
                     .tag("security")
 
                 devicesTab
-                    .tabItem { Label("Devices", systemImage: "iphone") }
+                    .tabItem { Label("tab_devices", systemImage: "iphone") }
                     .tag("devices")
             }
         }
@@ -193,26 +193,26 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         Form {
-            Section("Server") {
+            Section("section_server") {
                 if isEditingName {
                     HStack {
-                        TextField("Server Name", text: $editingName)
+                        TextField("server_name_placeholder", text: $editingName)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit { saveName() }
 
-                        Button("Save") { saveName() }
+                        Button("save_button") { saveName() }
                             .buttonStyle(.borderedProminent)
                             .controlSize(.small)
                             .disabled(editingName.trimmingCharacters(in: .whitespaces).isEmpty)
 
-                        Button("Cancel") { isEditingName = false }
+                        Button("cancel_button") { isEditingName = false }
                             .controlSize(.small)
                     }
                 } else {
-                    LabeledContent("Name") {
+                    LabeledContent("label_name") {
                         HStack(spacing: 8) {
                             Text(server.serverName)
-                            Button("Edit") {
+                            Button("edit_button") {
                                 editingName = server.serverName
                                 isEditingName = true
                             }
@@ -221,31 +221,31 @@ struct SettingsView: View {
                     }
                 }
 
-                LabeledContent("Port") {
+                LabeledContent("label_port") {
                     Text("\(MyRemoteConstants.defaultPort)")
                         .foregroundStyle(.secondary)
                 }
 
-                Picker("Stream Quality", selection: $server.streamQuality) {
+                Picker("stream_quality", selection: $server.streamQuality) {
                     ForEach(ServerManager.StreamQuality.allCases) { quality in
                         Text(quality.rawValue.capitalized).tag(quality)
                     }
                 }
 
-                LabeledContent("Status") {
+                LabeledContent("label_status") {
                     HStack(spacing: 6) {
                         Circle()
                             .fill(server.isRunning ? Color.green : Color.gray)
                             .frame(width: 8, height: 8)
-                        Text(server.isRunning ? "Running" : "Stopped")
+                        Text(server.isRunning ? LocalizedStringKey("status_running") : LocalizedStringKey("status_stopped"))
                     }
                 }
             }
 
-            Section("Permissions") {
+            Section("section_permissions") {
                 permissionRow(
-                    title: "Screen Recording",
-                    description: "Capture and stream your screen",
+                    title: "screen_recording_title",
+                    description: "screen_recording_desc",
                     isGranted: hasScreenRecording
                 ) {
                     ScreenCaptureManager.requestPermission()
@@ -253,44 +253,44 @@ struct SettingsView: View {
                 }
 
                 permissionRow(
-                    title: "Accessibility",
-                    description: "Control mouse and keyboard",
+                    title: "accessibility_title",
+                    description: "accessibility_desc",
                     isGranted: hasAccessibility
                 ) {
                     MouseInjector.requestAccessibilityPermission()
                     refreshPermissions()
                 }
 
-                Button("Open System Settings") {
+                Button("open_system_settings") {
                     NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy")!)
                 }
                 .font(.caption)
             }
 
-            Section("Network") {
-                LabeledContent("Local IP") {
+            Section("section_network") {
+                LabeledContent("label_local_ip") {
                     Text("\(server.localIP):\(MyRemoteConstants.defaultPort)")
                         .font(.system(.body, design: .monospaced))
                         .textSelection(.enabled)
                 }
 
-                LabeledContent("Public IP") {
+                LabeledContent("label_public_ip") {
                     Text("\(server.publicIP):\(MyRemoteConstants.defaultPort)")
                         .font(.system(.body, design: .monospaced))
                         .textSelection(.enabled)
                 }
 
-                DisclosureGroup("Remote Access Setup Guide") {
+                DisclosureGroup("remote_access_guide") {
                     VStack(alignment: .leading, spacing: 8) {
-                        guideStep(1, "Open your router admin page (usually 192.168.1.1)")
-                        guideStep(2, "Find 'Port Forwarding' or 'Virtual Server' or 'NAT'")
-                        guideStep(3, "Add rule: External port 5910 → \(server.localIP):5910 TCP")
-                        guideStep(4, "On iPhone, enter your Public IP: \(server.publicIP)")
-                        guideStep(5, "Make sure macOS Firewall allows incoming connections")
+                        guideStep(1, String(localized: "guide_step_1"))
+                        guideStep(2, String(localized: "guide_step_2"))
+                        guideStep(3, String(localized: "guide_step_3 \(server.localIP)"))
+                        guideStep(4, String(localized: "guide_step_4 \(server.publicIP)"))
+                        guideStep(5, String(localized: "guide_step_5"))
 
                         Divider()
 
-                        Text("If you don't have router admin access, you'll need a VPN (e.g. Tailscale) or a relay server to connect remotely.")
+                        Text("guide_vpn_note")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -305,7 +305,7 @@ struct SettingsView: View {
 
     private var securityTab: some View {
         Form {
-            Section("Current PIN / Password") {
+            Section("section_current_pin") {
                 HStack {
                     if showPassword {
                         Text(currentPIN)
@@ -315,14 +315,14 @@ struct SettingsView: View {
                             .font(.title2)
                     }
                     Spacer()
-                    Button(showPassword ? "Hide" : "Show") {
+                    Button(showPassword ? LocalizedStringKey("hide_button") : LocalizedStringKey("show_button")) {
                         showPassword.toggle()
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.blue)
                 }
 
-                Button("Generate New PIN") {
+                Button("generate_new_pin") {
                     do {
                         let pin = try server.authManager.generatePIN()
                         currentPIN = pin
@@ -333,10 +333,10 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Set Custom Password") {
-                SecureField("New password (min 8 characters)", text: $passwordInput)
+            Section("section_custom_password") {
+                SecureField("password_placeholder", text: $passwordInput)
 
-                Button("Set Password") {
+                Button("set_password") {
                     guard passwordInput.count >= 8 else { return }
                     do {
                         try server.authManager.setPassword(passwordInput)
@@ -366,15 +366,15 @@ struct SettingsView: View {
 
     private var devicesTab: some View {
         Form {
-            Section("Trusted Devices") {
+            Section("section_trusted_devices") {
                 if server.trustedDeviceStore.devices.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "iphone.slash")
                             .font(.title)
                             .foregroundStyle(.secondary)
-                        Text("No trusted devices")
+                        Text("no_trusted_devices")
                             .foregroundStyle(.secondary)
-                        Text("Devices approved with \"Always Allow\" appear here.")
+                        Text("trusted_devices_hint")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
@@ -394,14 +394,14 @@ struct SettingsView: View {
                                 Text(device.model)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                Text("Trusted \(device.dateAdded.formatted(date: .abbreviated, time: .shortened))")
+                                Text("trusted_date \(device.dateAdded.formatted(date: .abbreviated, time: .shortened))")
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
                             }
 
                             Spacer()
 
-                            Button("Revoke", role: .destructive) {
+                            Button("revoke_button", role: .destructive) {
                                 deviceToRevoke = device
                             }
                             .buttonStyle(.bordered)
@@ -411,7 +411,7 @@ struct SettingsView: View {
                 }
 
                 if !server.trustedDeviceStore.devices.isEmpty {
-                    Button("Revoke All Devices", role: .destructive) {
+                    Button("revoke_all_devices", role: .destructive) {
                         server.trustedDeviceStore.revokeAll()
                     }
                 }
@@ -419,24 +419,24 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .confirmationDialog(
-            "Revoke \"\(deviceToRevoke?.name ?? "")\"?",
+            "revoke_confirm_title \(deviceToRevoke?.name ?? "")",
             isPresented: Binding(
                 get: { deviceToRevoke != nil },
                 set: { if !$0 { deviceToRevoke = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("Revoke", role: .destructive) {
+            Button("revoke_button", role: .destructive) {
                 if let device = deviceToRevoke {
                     server.trustedDeviceStore.revoke(deviceUUID: device.id)
                 }
                 deviceToRevoke = nil
             }
-            Button("Cancel", role: .cancel) {
+            Button("cancel_button", role: .cancel) {
                 deviceToRevoke = nil
             }
         } message: {
-            Text("This device will need to be approved again on next connection.")
+            Text("revoke_confirm_message")
         }
     }
 
@@ -452,8 +452,8 @@ struct SettingsView: View {
     // MARK: - Helpers
 
     private func permissionRow(
-        title: String,
-        description: String,
+        title: LocalizedStringKey,
+        description: LocalizedStringKey,
         isGranted: Bool,
         action: @escaping () -> Void
     ) -> some View {
@@ -466,11 +466,11 @@ struct SettingsView: View {
             }
             Spacer()
             if isGranted {
-                Label("Granted", systemImage: "checkmark.circle.fill")
+                Label("permission_granted", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.callout)
             } else {
-                Button("Grant") { action() }
+                Button("grant_button") { action() }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
             }

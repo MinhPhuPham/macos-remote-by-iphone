@@ -1,0 +1,181 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "app_title": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "MyRemote" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "MyRemote" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "MyRemote" } }
+      }
+    },
+    "same_wifi_tab": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Same WiFi" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "同じWiFi" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Cùng WiFi" } }
+      }
+    },
+    "remote_ip_tab": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Remote IP" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "リモートIP" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "IP từ xa" } }
+      }
+    },
+    "connection_mode_picker": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Connection Mode" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "接続方法" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Chế độ kết nối" } }
+      }
+    },
+    "default_server_name": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Mac" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Mac" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Mac" } }
+      }
+    },
+    "waiting_for_approval %@": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Waiting for %@ to approve..." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%@の承認を待っています..." } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Đang chờ %@ chấp thuận..." } }
+      }
+    },
+    "check_mac_approval": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Check your Mac for the approval dialog." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Macの承認ダイアログを確認してください。" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Kiểm tra hộp thoại chấp thuận trên Mac của bạn." } }
+      }
+    },
+    "connecting_title": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Connecting" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "接続中" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Đang kết nối" } }
+      }
+    },
+    "reconnecting_message": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Reconnecting..." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "再接続中..." } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Đang kết nối lại..." } }
+      }
+    },
+    "reconnect_attempt %lld %lld": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Attempt %1$lld of %2$lld" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%2$lld回中%1$lld回目" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Lần thử %1$lld / %2$lld" } }
+      }
+    },
+    "cancel_button": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Cancel" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "キャンセル" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Hủy" } }
+      }
+    },
+    "reconnecting_title": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Reconnecting" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "再接続中" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Đang kết nối lại" } }
+      }
+    },
+    "error_title": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Error" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "エラー" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Lỗi" } }
+      }
+    },
+    "try_again_button": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Try Again" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "再試行" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Thử lại" } }
+      }
+    },
+    "connect_title": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Connect" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "接続" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Kết nối" } }
+      }
+    },
+    "enter_pin_hint": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Enter the PIN or password shown on your Mac" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Macに表示されているPINまたはパスワードを入力してください" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Nhập mã PIN hoặc mật khẩu hiển thị trên Mac của bạn" } }
+      }
+    },
+    "pin_or_password_placeholder": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "PIN or Password" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "PINまたはパスワード" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Mã PIN hoặc Mật khẩu" } }
+      }
+    },
+    "connect_button": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Connect" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "接続する" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Kết nối" } }
+      }
+    },
+    "remote_ip_header": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Remote IP" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "リモートIPアドレス" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "IP từ xa" } }
+      }
+    },
+    "remote_ip_description %llu": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Enter your Mac's IP address or hostname.\nPort %llu must be forwarded on your router." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "MacのIPアドレスまたはホスト名を入力してください。\nルーターでポート%lluを転送する必要があります。" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Nhập địa chỉ IP hoặc tên máy chủ Mac của bạn.\nCần chuyển tiếp cổng %llu trên router." } }
+      }
+    },
+    "hostname_placeholder": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Hostname or IP address" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ホスト名またはIPアドレス" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Tên máy chủ hoặc địa chỉ IP" } }
+      }
+    },
+    "port_placeholder": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Port" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ポート" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Cổng" } }
+      }
+    },
+    "searching_for_mac": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Searching for Mac..." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "Macを検索中..." } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Đang tìm kiếm Mac..." } }
+      }
+    },
+    "searching_hint": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Make sure MyRemote Server is running on your Mac\nand both devices are on the same WiFi network." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "MacでMyRemoteサーバーが起動していることと、\n両方のデバイスが同じWiFiネットワークに接続していることを確認してください。" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Đảm bảo MyRemote Server đang chạy trên Mac của bạn\nvà cả hai thiết bị đều kết nối cùng mạng WiFi." } }
+      }
+    },
+    "server_available_label": {
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Available" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "利用可能" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "Sẵn sàng" } }
+      }
+    }
+  },
+  "version": "1.1"
+}

@@ -1,0 +1,566 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "accessibility_desc" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Control mouse and keyboard" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "マウスとキーボードを操作する" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Điều khiển chuột và bàn phím" } }
+      }
+    },
+    "accessibility_needed_desc" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Needed to control mouse and keyboard" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "マウスとキーボードの操作に必要です" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Cần thiết để điều khiển chuột và bàn phím" } }
+      }
+    },
+    "accessibility_required_desc" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Required to control mouse and keyboard" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "マウスとキーボードの操作に必須です" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Bắt buộc để điều khiển chuột và bàn phím" } }
+      }
+    },
+    "accessibility_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Accessibility" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "アクセシビリティ" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Trợ năng" } }
+      }
+    },
+    "all_set_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "You're All Set!" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "準備完了！" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Đã sẵn sàng!" } }
+      }
+    },
+    "allow_once" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Allow Once" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "一度だけ許可" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Cho phép một lần" } }
+      }
+    },
+    "always_allow" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Always Allow" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "常に許可" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Luôn cho phép" } }
+      }
+    },
+    "cancel_button" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "キャンセル" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Hủy" } }
+      }
+    },
+    "connection_request" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connection Request" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "接続リクエスト" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Yêu cầu kết nối" } }
+      }
+    },
+    "connection_warning" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This device will see your screen and control mouse & keyboard." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "このデバイスは画面を閲覧し、マウスとキーボードを操作します。" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Thiết bị này sẽ xem màn hình và điều khiển chuột & bàn phím của bạn." } }
+      }
+    },
+    "continue_button" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Continue" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "続ける" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Tiếp tục" } }
+      }
+    },
+    "deny" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Deny" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "拒否" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Từ chối" } }
+      }
+    },
+    "disconnect_client" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disconnect Client" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "クライアントを切断" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Ngắt kết nối thiết bị" } }
+      }
+    },
+    "edit_button" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Edit" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "編集" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Chỉnh sửa" } }
+      }
+    },
+    "generate_new_pin" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Generate New PIN" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "新しいPINを生成" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Tạo mã PIN mới" } }
+      }
+    },
+    "get_started" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Get Started" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "始める" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Bắt đầu" } }
+      }
+    },
+    "grant_button" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Grant" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "許可する" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Cấp quyền" } }
+      }
+    },
+    "grant_permissions_hint" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Grant permissions in System Settings → Privacy & Security" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "システム設定 → プライバシーとセキュリティで権限を付与してください" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Cấp quyền trong Cài đặt hệ thống → Quyền riêng tư & Bảo mật" } }
+      }
+    },
+    "guide_step_1" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open your router admin page (usually 192.168.1.1)" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ルーターの管理ページを開く（通常は192.168.1.1）" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Mở trang quản trị router (thường là 192.168.1.1)" } }
+      }
+    },
+    "guide_step_2" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Find 'Port Forwarding' or 'Virtual Server' or 'NAT'" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "「ポート転送」「仮想サーバー」または「NAT」を探す" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Tìm mục 'Chuyển tiếp cổng' hoặc 'Máy chủ ảo' hoặc 'NAT'" } }
+      }
+    },
+    "guide_step_3 %@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add rule: External port 5910 → %@:5910 TCP" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ルールを追加：外部ポート5910 → %@:5910 TCP" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Thêm quy tắc: Cổng ngoài 5910 → %@:5910 TCP" } }
+      }
+    },
+    "guide_step_4 %@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "On iPhone, enter your Public IP: %@" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "iPhoneでパブリックIPを入力：%@" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Trên iPhone, nhập IP công cộng của bạn: %@" } }
+      }
+    },
+    "guide_step_5" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Make sure macOS Firewall allows incoming connections" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "macOSファイアウォールが受信接続を許可していることを確認してください" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Đảm bảo Tường lửa macOS cho phép kết nối đến" } }
+      }
+    },
+    "guide_vpn_note" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "If you don't have router admin access, you'll need a VPN (e.g. Tailscale) or a relay server to connect remotely." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ルーターの管理者アクセスがない場合は、VPN（例：Tailscale）またはリレーサーバーが必要です。" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Nếu không có quyền quản trị router, bạn cần VPN (ví dụ: Tailscale) hoặc máy chủ relay để kết nối từ xa." } }
+      }
+    },
+    "hide_button" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hide" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "隠す" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Ẩn" } }
+      }
+    },
+    "instruction_step_1" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The server is starting automatically" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "サーバーが自動的に起動しています" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Máy chủ đang tự động khởi động" } }
+      }
+    },
+    "instruction_step_2" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Look for the MyRemote icon in your menu bar" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "メニューバーのMyRemoteアイコンを確認してください" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Tìm biểu tượng MyRemote trên thanh menu" } }
+      }
+    },
+    "instruction_step_3" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open MyRemote on your iPhone to connect" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "iPhoneでMyRemoteを開いて接続してください" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Mở MyRemote trên iPhone để kết nối" } }
+      }
+    },
+    "ip_label_local" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Local:" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ローカル：" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Cục bộ:" } }
+      }
+    },
+    "ip_label_public" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Public:" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "パブリック：" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Công cộng:" } }
+      }
+    },
+    "label_local_ip" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Local IP" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ローカルIP" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "IP cục bộ" } }
+      }
+    },
+    "label_name" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Name" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "名前" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Tên" } }
+      }
+    },
+    "label_port" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Port" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ポート" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Cổng" } }
+      }
+    },
+    "label_public_ip" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Public IP" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "パブリックIP" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "IP công cộng" } }
+      }
+    },
+    "label_status" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Status" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ステータス" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Trạng thái" } }
+      }
+    },
+    "no_trusted_devices" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No trusted devices" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "信頼済みデバイスなし" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Không có thiết bị tin cậy" } }
+      }
+    },
+    "open_system_settings" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open System Settings" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "システム設定を開く" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Mở Cài đặt hệ thống" } }
+      }
+    },
+    "password_placeholder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New password (min 8 characters)" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "新しいパスワード（8文字以上）" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Mật khẩu mới (tối thiểu 8 ký tự)" } }
+      }
+    },
+    "permission_granted" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Granted" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "許可済み" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Đã cấp phép" } }
+      }
+    },
+    "permissions_change_hint" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "You can change these later in\nSystem Settings → Privacy & Security" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "後からシステム設定 →\nプライバシーとセキュリティで変更できます" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Bạn có thể thay đổi sau trong\nCài đặt hệ thống → Quyền riêng tư & Bảo mật" } }
+      }
+    },
+    "permissions_required" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Permissions Required" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "権限が必要です" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Yêu cầu quyền truy cập" } }
+      }
+    },
+    "quit_app" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Quit MyRemote" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "MyRemoteを終了" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Thoát MyRemote" } }
+      }
+    },
+    "refresh_status" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Refresh Status" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ステータスを更新" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Làm mới trạng thái" } }
+      }
+    },
+    "remote_access_guide" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remote Access Setup Guide" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "リモートアクセス設定ガイド" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Hướng dẫn thiết lập truy cập từ xa" } }
+      }
+    },
+    "remote_access_note" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remote access requires port forwarding on your router." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "リモートアクセスにはルーターのポート転送が必要です。" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Truy cập từ xa yêu cầu chuyển tiếp cổng trên router." } }
+      }
+    },
+    "required_permissions" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Required Permissions" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "必要な権限" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Các quyền bắt buộc" } }
+      }
+    },
+    "revoke_all_devices" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Revoke All Devices" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "すべてのデバイスを削除" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Xóa tất cả thiết bị" } }
+      }
+    },
+    "revoke_button" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Revoke" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "削除" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Thu hồi" } }
+      }
+    },
+    "revoke_confirm_message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This device will need to be approved again on next connection." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "このデバイスは次回接続時に再承認が必要です。" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Thiết bị này sẽ cần được chấp thuận lại vào lần kết nối tiếp theo." } }
+      }
+    },
+    "revoke_confirm_title %@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Revoke \"%@\"?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "「%@」を削除しますか？" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Thu hồi \"%@\"?" } }
+      }
+    },
+    "save_button" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "保存" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Lưu" } }
+      }
+    },
+    "screen_recording_desc" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Capture and stream your screen" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "画面をキャプチャしてストリーミングする" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Ghi lại và phát trực tuyến màn hình" } }
+      }
+    },
+    "screen_recording_needed_desc" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Needed to capture and stream your screen" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "画面のキャプチャとストリーミングに必要です" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Cần thiết để ghi lại và phát trực tuyến màn hình" } }
+      }
+    },
+    "screen_recording_required_desc" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Required to capture and stream your screen" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "画面のキャプチャとストリーミングに必須です" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Bắt buộc để ghi lại và phát trực tuyến màn hình" } }
+      }
+    },
+    "screen_recording_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Screen Recording" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "画面収録" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Ghi màn hình" } }
+      }
+    },
+    "section_current_pin" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Current PIN / Password" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "現在のPIN / パスワード" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Mã PIN / Mật khẩu hiện tại" } }
+      }
+    },
+    "section_custom_password" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Set Custom Password" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "カスタムパスワードを設定" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Đặt mật khẩu tùy chỉnh" } }
+      }
+    },
+    "section_network" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Network" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ネットワーク" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Mạng" } }
+      }
+    },
+    "section_permissions" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Permissions" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "権限" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Quyền truy cập" } }
+      }
+    },
+    "section_server" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Server" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "サーバー" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Máy chủ" } }
+      }
+    },
+    "section_trusted_devices" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Trusted Devices" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "信頼済みデバイス" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Thiết bị tin cậy" } }
+      }
+    },
+    "server_name_placeholder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Server Name" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "サーバー名" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Tên máy chủ" } }
+      }
+    },
+    "set_password" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Set Password" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "パスワードを設定" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Đặt mật khẩu" } }
+      }
+    },
+    "settings_menu" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings..." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "設定..." } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Cài đặt..." } }
+      }
+    },
+    "setup_guide" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Setup Guide..." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "セットアップガイド..." } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Hướng dẫn cài đặt..." } }
+      }
+    },
+    "show_button" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "表示" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Hiển thị" } }
+      }
+    },
+    "start_server" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Start Server" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "サーバーを開始" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Khởi động máy chủ" } }
+      }
+    },
+    "start_server_and_close" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Start Server & Close" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "サーバーを起動して閉じる" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Khởi động máy chủ & Đóng" } }
+      }
+    },
+    "status_running" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Running" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "実行中" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Đang chạy" } }
+      }
+    },
+    "status_stopped" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Stopped" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "停止中" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Đã dừng" } }
+      }
+    },
+    "stop_server" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Stop Server" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "サーバーを停止" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Dừng máy chủ" } }
+      }
+    },
+    "stream_quality" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Stream Quality" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ストリーム品質" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Chất lượng phát trực tuyến" } }
+      }
+    },
+    "tab_devices" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Devices" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "デバイス" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Thiết bị" } }
+      }
+    },
+    "tab_general" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "General" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "一般" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Chung" } }
+      }
+    },
+    "tab_security" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Security" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "セキュリティ" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Bảo mật" } }
+      }
+    },
+    "trusted_date %@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Trusted %@" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "%@に信頼済み" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Tin cậy %@" } }
+      }
+    },
+    "trusted_devices_hint" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Devices approved with \"Always Allow\" appear here." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "「常に許可」で承認されたデバイスがここに表示されます。" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Các thiết bị được chấp thuận bằng \"Luôn cho phép\" sẽ xuất hiện ở đây." } }
+      }
+    },
+    "welcome_subtitle" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Control your Mac from your iPhone.\nLet's set up the required permissions." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "iPhoneからMacを操作しましょう。\n必要な権限を設定します。" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Điều khiển Mac từ iPhone của bạn.\nHãy thiết lập các quyền cần thiết." } }
+      }
+    },
+    "welcome_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Welcome to MyRemote" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "MyRemoteへようこそ" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Chào mừng đến với MyRemote" } }
+      }
+    },
+    "your_pin_label" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your PIN:" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "あなたのPIN：" } },
+        "vi" : { "stringUnit" : { "state" : "translated", "value" : "Mã PIN của bạn:" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

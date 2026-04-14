@@ -45,15 +45,15 @@ struct OnboardingView: View {
                 .font(.system(size: 56))
                 .foregroundStyle(.blue)
 
-            Text("Welcome to MyRemote")
+            Text("welcome_title")
                 .font(.largeTitle.bold())
 
-            Text("Control your Mac from your iPhone.\nLet's set up the required permissions.")
+            Text("welcome_subtitle")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            Button("Get Started") {
+            Button("get_started") {
                 withAnimation { step = .permissions }
             }
             .buttonStyle(.borderedProminent)
@@ -65,14 +65,14 @@ struct OnboardingView: View {
 
     private var permissionsStep: some View {
         VStack(spacing: 24) {
-            Text("Required Permissions")
+            Text("required_permissions")
                 .font(.title.bold())
 
             VStack(spacing: 16) {
                 permissionRow(
                     icon: "rectangle.inset.filled.and.person.filled",
-                    title: "Screen Recording",
-                    description: "Needed to capture and stream your screen",
+                    title: "screen_recording_title",
+                    description: "screen_recording_needed_desc",
                     isGranted: hasScreenRecording
                 ) {
                     ScreenCaptureManager.requestPermission()
@@ -84,8 +84,8 @@ struct OnboardingView: View {
 
                 permissionRow(
                     icon: "accessibility",
-                    title: "Accessibility",
-                    description: "Needed to control mouse and keyboard",
+                    title: "accessibility_title",
+                    description: "accessibility_needed_desc",
                     isGranted: hasAccessibility
                 ) {
                     MouseInjector.requestAccessibilityPermission()
@@ -98,19 +98,19 @@ struct OnboardingView: View {
             .background(RoundedRectangle(cornerRadius: 12).fill(.background))
 
             HStack(spacing: 16) {
-                Button("Refresh Status") {
+                Button("refresh_status") {
                     refreshPermissions()
                 }
                 .buttonStyle(.bordered)
 
-                Button("Continue") {
+                Button("continue_button") {
                     withAnimation { step = .ready }
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
             }
 
-            Text("You can change these later in\nSystem Settings → Privacy & Security")
+            Text("permissions_change_hint")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -125,20 +125,20 @@ struct OnboardingView: View {
                 .font(.system(size: 56))
                 .foregroundStyle(.green)
 
-            Text("You're All Set!")
+            Text("all_set_title")
                 .font(.title.bold())
 
             VStack(alignment: .leading, spacing: 8) {
-                instructionRow(number: "1", text: "The server is starting automatically")
-                instructionRow(number: "2", text: "Look for the MyRemote icon in your menu bar")
-                instructionRow(number: "3", text: "Open MyRemote on your iPhone to connect")
+                instructionRow(number: "1", text: String(localized: "instruction_step_1"))
+                instructionRow(number: "2", text: String(localized: "instruction_step_2"))
+                instructionRow(number: "3", text: String(localized: "instruction_step_3"))
             }
             .padding()
             .background(RoundedRectangle(cornerRadius: 12).fill(.background))
 
             if let pin = server.authManager.currentPassword() {
                 VStack(spacing: 4) {
-                    Text("Your PIN:")
+                    Text("your_pin_label")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text(pin)
@@ -147,7 +147,7 @@ struct OnboardingView: View {
                 }
             }
 
-            Button("Start Server & Close") {
+            Button("start_server_and_close") {
                 if !server.isRunning {
                     server.start()
                 }
@@ -163,8 +163,8 @@ struct OnboardingView: View {
 
     private func permissionRow(
         icon: String,
-        title: String,
-        description: String,
+        title: LocalizedStringKey,
+        description: LocalizedStringKey,
         isGranted: Bool,
         action: @escaping () -> Void
     ) -> some View {
@@ -184,11 +184,11 @@ struct OnboardingView: View {
             Spacer()
 
             if isGranted {
-                Label("Granted", systemImage: "checkmark.circle.fill")
+                Label("permission_granted", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.callout)
             } else {
-                Button("Grant") { action() }
+                Button("grant_button") { action() }
                     .buttonStyle(.bordered)
             }
         }

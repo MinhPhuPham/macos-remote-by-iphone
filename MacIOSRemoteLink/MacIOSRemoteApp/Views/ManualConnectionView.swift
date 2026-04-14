@@ -39,10 +39,10 @@ struct ManualConnectionView: View {
                 .font(.system(size: 44))
                 .foregroundStyle(.blue)
 
-            Text("Remote IP")
+            Text("remote_ip_header")
                 .font(.title3.bold())
 
-            Text("Enter your Mac's IP address or hostname.\nPort \(MyRemoteConstants.defaultPort) must be forwarded on your router.")
+            Text("remote_ip_description \(MyRemoteConstants.defaultPort)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -51,7 +51,7 @@ struct ManualConnectionView: View {
 
     private var inputFields: some View {
         VStack(spacing: 12) {
-            TextField("Hostname or IP address", text: $host)
+            TextField("hostname_placeholder", text: $host)
                 .textContentType(.URL)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -61,7 +61,7 @@ struct ManualConnectionView: View {
                 .padding()
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
 
-            TextField("Port", text: $portString)
+            TextField("port_placeholder", text: $portString)
                 .keyboardType(.numberPad)
                 .focused($focusedField, equals: .port)
                 .submitLabel(.go)
@@ -73,7 +73,7 @@ struct ManualConnectionView: View {
 
     private var connectButton: some View {
         Button(action: submit) {
-            Text("Connect")
+            Text("connect_button")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)

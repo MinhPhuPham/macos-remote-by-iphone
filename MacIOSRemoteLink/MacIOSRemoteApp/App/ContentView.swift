@@ -9,10 +9,17 @@ enum Route: Hashable {
 
 /// Connection tab selection.
 enum ConnectionTab: String, CaseIterable, Identifiable {
-    case local = "Same WiFi"
-    case remote = "Remote IP"
+    case local
+    case remote
 
     var id: String { rawValue }
+
+    var label: LocalizedStringKey {
+        switch self {
+        case .local: return "same_wifi_tab"
+        case .remote: return "remote_ip_tab"
+        }
+    }
 }
 
 /// Root view: NavigationStack with Local WiFi / Remote IP connection modes.
@@ -45,11 +52,11 @@ struct ContentView: View {
                 
                 Spacer(minLength: 0)
             }
-            .navigationTitle("MyRemote")
+            .navigationTitle(Text("app_title"))
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .password:
-                    passwordScreen(serverName: selectedServer?.name ?? "Mac")
+                    passwordScreen(serverName: selectedServer?.name ?? String(localized: "default_server_name"))
                 case .wanPassword(let host, let port):
                     wanPasswordScreen(host: host, port: port)
                 case .session:
@@ -81,9 +88,9 @@ struct ContentView: View {
     // MARK: - Connection Mode Picker
 
     private var connectionModePicker: some View {
-        Picker("Connection Mode", selection: $connectionTab) {
+        Picker("connection_mode_picker", selection: $connectionTab) {
             ForEach(ConnectionTab.allCases) { tab in
-                Text(tab.rawValue).tag(tab)
+                Text(tab.label).tag(tab)
             }
         }
         .pickerStyle(.segmented)
@@ -122,22 +129,22 @@ struct ContentView: View {
     private func connectionStateView<Content: View>(serverName: String, @ViewBuilder defaultContent: () -> Content) -> some View {
         switch connection.state {
         case .waitingForApproval:
-            statusView(icon: nil, title: "Waiting for \(serverName) to approve...",
-                       subtitle: "Check your Mac for the approval dialog.", showProgress: true)
-                .navigationTitle("Connecting")
+            statusView(icon: nil, title: String(localized: "waiting_for_approval \(serverName)"),
+                       subtitle: String(localized: "check_mac_approval"), showProgress: true)
+                .navigationTitle(Text("connecting_title"))
         case .reconnecting(let attempt):
             VStack(spacing: 16) {
                 ProgressView().scaleEffect(1.5)
-                Text("Reconnecting...").font(.headline)
-                Text("Attempt \(attempt) of \(MyRemoteConstants.maxReconnectRetries)")
+                Text("reconnecting_message").font(.headline)
+                Text("reconnect_attempt \(attempt) \(MyRemoteConstants.maxReconnectRetries)")
                     .font(.subheadline).foregroundStyle(.secondary)
-                Button("Cancel") { connection.disconnect() }.buttonStyle(.bordered)
+                Button("cancel_button") { connection.disconnect() }.buttonStyle(.bordered)
             }
             .padding()
-            .navigationTitle("Reconnecting")
+            .navigationTitle(Text("reconnecting_title"))
         case .error(let message):
             statusView(icon: "exclamationmark.triangle", title: message, iconColor: .red)
-                .navigationTitle("Error")
+                .navigationTitle(Text("error_title"))
         default:
             defaultContent()
         }
@@ -157,7 +164,7 @@ struct ContentView: View {
                 Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
             }
             if case .error = connection.state {
-                Button("Try Again") { connection.disconnect() }.buttonStyle(.borderedProminent)
+                Button("try_again_button") { connection.disconnect() }.buttonStyle(.borderedProminent)
             }
         }
         .padding()

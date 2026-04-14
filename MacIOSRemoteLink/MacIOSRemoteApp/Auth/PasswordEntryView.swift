@@ -19,7 +19,7 @@ struct PasswordEntryView: View {
             connectButton
         }
         .padding(32)
-        .navigationTitle("Connect")
+        .navigationTitle(Text("connect_title"))
         .onAppear {
             isPasswordFieldFocused = true
         }
@@ -36,7 +36,7 @@ struct PasswordEntryView: View {
             Text(serverName)
                 .font(.title2.bold())
 
-            Text("Enter the PIN or password shown on your Mac")
+            Text("enter_pin_hint")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -47,9 +47,9 @@ struct PasswordEntryView: View {
         HStack {
             Group {
                 if isSecure {
-                    SecureField("PIN or Password", text: $password)
+                    SecureField("pin_or_password_placeholder", text: $password)
                 } else {
-                    TextField("PIN or Password", text: $password)
+                    TextField("pin_or_password_placeholder", text: $password)
                 }
             }
             .textContentType(.password)
@@ -72,7 +72,7 @@ struct PasswordEntryView: View {
 
     private var connectButton: some View {
         Button(action: submitIfValid) {
-            Text("Connect")
+            Text("connect_button")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
