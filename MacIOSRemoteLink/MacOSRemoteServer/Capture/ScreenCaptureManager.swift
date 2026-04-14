@@ -6,6 +6,7 @@ import os
 import ScreenCaptureKit
 
 /// Manages screen capture via ScreenCaptureKit.
+/// Supports multiple displays — call `listDisplays()` then `startCapture(displayIndex:)`.
 final class ScreenCaptureManager: NSObject, ObservableObject {
 
     @Published private(set) var isCapturing = false
@@ -18,6 +19,9 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
 
     private(set) var displayWidth: Int = 0
     private(set) var displayHeight: Int = 0
+    /// Display origin in macOS global coordinate space (for multi-display mouse mapping).
+    private(set) var displayOriginX: CGFloat = 0
+    private(set) var displayOriginY: CGFloat = 0
     private var hasLoggedFirstPixelBuffer = false
 
     // MARK: - Permissions
@@ -30,29 +34,64 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         CGRequestScreenCaptureAccess()
     }
 
+    // MARK: - Display Discovery
+
+    /// List all available displays.
+    static func listDisplays() async throws -> [DisplayInfo] {
+        let content = try await SCShareableContent.current
+        return content.displays.enumerated().map { index, display in
+            let isMain = (display.displayID == CGMainDisplayID())
+            let name: String
+            if isMain {
+                name = "Main Display"
+            } else {
+                name = "Display \(index + 1)"
+            }
+            return DisplayInfo(
+                id: index,
+                name: name,
+                width: display.width,
+                height: display.height,
+                isMain: isMain
+            )
+        }
+    }
+
     // MARK: - Start / Stop
 
-    func startCapture(scaleFactor: CGFloat = 0.5, frameRate: Int = MyRemoteConstants.LAN.defaultFrameRate) async throws {
+    func startCapture(
+        displayIndex: Int = 0,
+        scaleFactor: CGFloat = 0.5,
+        frameRate: Int = MyRemoteConstants.LAN.defaultFrameRate
+    ) async throws {
         guard Self.hasPermission() else {
             throw CaptureError.permissionDenied
         }
 
         let content = try await SCShareableContent.current
-        guard let display = content.displays.first else {
+        guard !content.displays.isEmpty else {
             throw CaptureError.noDisplayFound
         }
 
+        let safeIndex = min(displayIndex, content.displays.count - 1)
+        let display = content.displays[safeIndex]
+
         displayWidth = display.width
         displayHeight = display.height
-        Log.capture.info("Starting capture: scale=\(scaleFactor) fps=\(frameRate) display=\(display.width)x\(display.height)")
+        // Store global origin for multi-display coordinate mapping.
+        let bounds = CGDisplayBounds(display.displayID)
+        displayOriginX = bounds.origin.x
+        displayOriginY = bounds.origin.y
+        Log.capture.info("Capturing display \(safeIndex): \(display.width)x\(display.height) at origin (\(Int(bounds.origin.x)),\(Int(bounds.origin.y))) scale=\(scaleFactor)")
 
         let config = SCStreamConfiguration()
-        config.width = Int(CGFloat(display.width) * scaleFactor)
-        config.height = Int(CGFloat(display.height) * scaleFactor)
+        // H.264 requires even dimensions.
+        config.width = Int(CGFloat(display.width) * scaleFactor) & ~1
+        config.height = Int(CGFloat(display.height) * scaleFactor) & ~1
         config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(frameRate))
         config.pixelFormat = kCVPixelFormatType_32BGRA
         config.showsCursor = true
-        config.queueDepth = 2  // Small buffer: low latency but room for encode spikes.
+        config.queueDepth = 2
 
         let filter = SCContentFilter(display: display, excludingWindows: [])
 
@@ -71,21 +110,6 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         hasLoggedFirstPixelBuffer = false
         await MainActor.run { isCapturing = false }
     }
-
-    func updateConfiguration(scaleFactor: CGFloat, frameRate: Int) async throws {
-        guard let stream = stream else { return }
-        let content = try await SCShareableContent.current
-        guard let display = content.displays.first else { return }
-
-        let config = SCStreamConfiguration()
-        config.width = Int(CGFloat(display.width) * scaleFactor)
-        config.height = Int(CGFloat(display.height) * scaleFactor)
-        config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(frameRate))
-        config.pixelFormat = kCVPixelFormatType_32BGRA
-        config.showsCursor = true
-
-        try await stream.updateConfiguration(config)
-    }
 }
 
 // MARK: - SCStreamOutput
@@ -99,7 +123,7 @@ extension ScreenCaptureManager: SCStreamOutput {
         if !hasLoggedFirstPixelBuffer {
             let w = CVPixelBufferGetWidth(pixelBuffer)
             let h = CVPixelBufferGetHeight(pixelBuffer)
-            Log.capture.info("First pixel buffer received: \(w)x\(h)")
+            Log.capture.info("First pixel buffer: \(w)x\(h)")
             hasLoggedFirstPixelBuffer = true
         }
 
@@ -113,7 +137,7 @@ extension ScreenCaptureManager: SCStreamOutput {
 extension ScreenCaptureManager: SCStreamDelegate {
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        Log.capture.error("Capture stream stopped with error: \(error.localizedDescription)")
+        Log.capture.error("Capture stopped: \(error.localizedDescription)")
         DispatchQueue.main.async { [weak self] in
             self?.isCapturing = false
             self?.captureError = "Capture stopped: \(error.localizedDescription)"

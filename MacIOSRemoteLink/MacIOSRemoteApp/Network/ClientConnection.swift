@@ -20,6 +20,8 @@ final class ClientConnection: ObservableObject {
 
     @Published private(set) var state: ConnectionState = .disconnected
     @Published private(set) var sessionToken: String?
+    @Published private(set) var availableDisplays: [DisplayInfo] = []
+    @Published private(set) var currentDisplayIndex: Int = 0
     @Published var connectionMode: ConnectionMode = .lan
 
     private var connection: NWConnection?
@@ -181,6 +183,22 @@ final class ClientConnection: ObservableObject {
         sendFrame(.keyframeRequest)
     }
 
+    /// Request the server to switch to a different display.
+    func selectDisplay(index: Int) {
+        let payload = DisplaySelectPayload(displayIndex: index)
+        sendJSON(.displaySelect, payload: payload)
+        Log.connection.info("Requested display switch to index \(index)")
+    }
+
+    private func handleDisplayList(_ frame: ProtocolFrame) {
+        guard let payload = try? MessageCodec.decodePayload(DisplayListPayload.self, from: frame) else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.availableDisplays = payload.displays
+            self?.currentDisplayIndex = payload.currentIndex
+            Log.connection.info("Received \(payload.displays.count) display(s), current=\(payload.currentIndex)")
+        }
+    }
+
     // MARK: - Client-Side Heartbeat
 
     private func startClientHeartbeat() {
@@ -332,6 +350,8 @@ final class ClientConnection: ObservableObject {
         case .configUpdate:
             Log.connection.info("Received: configUpdate")
             onFrameReceived?(frame)
+        case .displayList:
+            handleDisplayList(frame)
         case .disconnect:
             Log.connection.info("Received: disconnect")
             DispatchQueue.main.async { [weak self] in

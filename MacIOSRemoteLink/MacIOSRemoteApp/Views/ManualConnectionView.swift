@@ -14,16 +14,21 @@ struct ManualConnectionView: View {
     }
 
     var body: some View {
-        VStack(spacing: 24) {
-            header
-
-            inputFields
-
-            connectButton
+        ScrollView {
+            VStack(spacing: 24) {
+                header
+                inputFields
+                connectButton
+            }
+            .padding(.horizontal, 32)
+            .padding(.vertical, 16)
         }
-        .padding(32)
-        .navigationTitle("Manual Connect")
-        .onAppear { focusedField = .host }
+        .scrollDismissesKeyboard(.interactively)
+        // Auto-focus after layout settles. .task auto-cancels on disappear — no leak.
+        .task {
+            try? await Task.sleep(for: .milliseconds(400))
+            focusedField = .host
+        }
     }
 
     // MARK: - Subviews
@@ -31,14 +36,14 @@ struct ManualConnectionView: View {
     private var header: some View {
         VStack(spacing: 8) {
             Image(systemName: "globe")
-                .font(.system(size: 48))
+                .font(.system(size: 44))
                 .foregroundStyle(.blue)
 
-            Text("Connect over Internet")
-                .font(.title2.bold())
+            Text("Remote IP")
+                .font(.title3.bold())
 
-            Text("Enter your Mac's public IP address or hostname.\nMake sure port \(MyRemoteConstants.defaultPort) is forwarded on your router.")
-                .font(.subheadline)
+            Text("Enter your Mac's IP address or hostname.\nPort \(MyRemoteConstants.defaultPort) must be forwarded on your router.")
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
@@ -55,14 +60,14 @@ struct ManualConnectionView: View {
                 .onSubmit { focusedField = .port }
                 .padding()
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                .accessibilityLabel("Server hostname or IP address")
 
             TextField("Port", text: $portString)
                 .keyboardType(.numberPad)
                 .focused($focusedField, equals: .port)
+                .submitLabel(.go)
+                .onSubmit { submit() }
                 .padding()
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                .accessibilityLabel("Server port number")
         }
     }
 
@@ -75,10 +80,10 @@ struct ManualConnectionView: View {
         }
         .buttonStyle(.borderedProminent)
         .disabled(host.trimmingCharacters(in: .whitespaces).isEmpty)
-        .accessibilityHint("Connects to the Mac over the internet")
     }
 
     private func submit() {
+        focusedField = nil  // Dismiss keyboard.
         let trimmedHost = host.trimmingCharacters(in: .whitespaces)
         guard !trimmedHost.isEmpty else { return }
         let port = UInt16(portString) ?? MyRemoteConstants.defaultPort

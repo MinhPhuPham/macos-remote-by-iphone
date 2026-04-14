@@ -5,16 +5,9 @@ import os
 import VideoToolbox
 
 /// H.264 hardware decoder using VideoToolbox.
-/// Receives SPS/PPS config and NAL units, outputs CVPixelBuffers.
-///
-/// Uses SYNCHRONOUS decode to provide natural backpressure:
-/// - The network thread blocks until decode completes (~1-2ms on hardware)
-/// - This prevents frame accumulation that causes memory exhaustion
-/// - Hardware H.264 decode is fast enough for 30fps real-time
+/// Uses SYNCHRONOUS decode for natural backpressure — prevents memory exhaustion.
 final class VideoDecoder {
 
-    /// Called with each decoded pixel buffer.
-    /// With synchronous decode, this fires on the caller's thread inside `decode()`.
     var onDecodedFrame: ((CVPixelBuffer, CMTime) -> Void)?
 
     private var session: VTDecompressionSession?
@@ -72,16 +65,11 @@ final class VideoDecoder {
         lock.lock()
         defer { lock.unlock() }
 
-        guard let session = session, let formatDesc = formatDescription else {
-            Log.video.debug("Decode skipped — no session configured")
-            return
-        }
+        guard let session = session, let formatDesc = formatDescription else { return }
 
         decodeCount += 1
         let frameNum = decodeCount
 
-        // Use the NAL data directly — synchronous decode completes before
-        // withUnsafeBytes exits, so the pointer stays valid.
         nalData.withUnsafeBytes { rawBuffer in
             guard let baseAddress = rawBuffer.baseAddress else { return }
 
@@ -97,10 +85,7 @@ final class VideoDecoder {
                 flags: 0,
                 blockBufferOut: &blockBuffer
             )
-            guard status == kCMBlockBufferNoErr, let buffer = blockBuffer else {
-                Log.video.warning("BlockBuffer failed: \(status)")
-                return
-            }
+            guard status == kCMBlockBufferNoErr, let buffer = blockBuffer else { return }
 
             var sampleBuffer: CMSampleBuffer?
             var timingInfo = CMSampleTimingInfo(
@@ -120,13 +105,8 @@ final class VideoDecoder {
                 sampleSizeArray: nil,
                 sampleBufferOut: &sampleBuffer
             )
-            guard status == noErr, let sample = sampleBuffer else {
-                Log.video.warning("SampleBuffer failed: \(status)")
-                return
-            }
+            guard status == noErr, let sample = sampleBuffer else { return }
 
-            // Truly synchronous decode — empty flags [].
-            // Output handler fires BEFORE DecodeFrame returns.
             var flagsOut = VTDecodeInfoFlags()
             let decodeStatus = VTDecompressionSessionDecodeFrame(
                 session,
@@ -134,21 +114,12 @@ final class VideoDecoder {
                 flags: [],
                 infoFlagsOut: &flagsOut
             ) { [weak self] cbStatus, _, imageBuffer, pts, _ in
-                if cbStatus != noErr {
-                    Log.video.warning("Decode callback error: \(cbStatus)")
-                    return
-                }
-                guard let pixelBuffer = imageBuffer else {
-                    Log.video.warning("Decode callback: no pixel buffer")
-                    return
-                }
+                guard cbStatus == noErr, let pixelBuffer = imageBuffer else { return }
                 self?.onDecodedFrame?(pixelBuffer, pts)
             }
 
-            if decodeStatus != noErr {
+            if decodeStatus != noErr && frameNum <= 5 {
                 Log.video.warning("DecodeFrame #\(frameNum) failed: \(decodeStatus)")
-            } else if frameNum <= 3 || frameNum % 300 == 0 {
-                Log.video.debug("Decoded frame #\(frameNum) (\(nalData.count)B)")
             }
         }
     }
@@ -159,7 +130,6 @@ final class VideoDecoder {
         lock.lock()
         defer { lock.unlock() }
         invalidateInternal()
-        Log.video.info("Decoder invalidated")
     }
 
     private func invalidateInternal() {
@@ -169,6 +139,7 @@ final class VideoDecoder {
         }
         session = nil
         formatDescription = nil
+        decodeCount = 0
     }
 
     private func createSession(formatDescription: CMVideoFormatDescription) throws {
@@ -193,8 +164,6 @@ final class VideoDecoder {
         self.session = decompSession
     }
 }
-
-// MARK: - Errors
 
 enum DecoderError: Error, LocalizedError {
     case formatCreationFailed(OSStatus)

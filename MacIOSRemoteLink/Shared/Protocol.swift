@@ -18,6 +18,8 @@ public enum MessageType: UInt8, Sendable {
     case ping            = 0x0C  // RTT measurement: client → server
     case pong            = 0x0D  // RTT measurement: server → client
     case qualityUpdate   = 0x0E  // Client → Server: request bitrate/fps change
+    case displayList     = 0x0F  // Server → Client: available displays
+    case displaySelect   = 0x10  // Client → Server: select display by index
 }
 
 // MARK: - Protocol Frame
@@ -189,5 +191,44 @@ public struct QualityUpdate: Codable, Sendable {
     public init(requestedBitrate: Int, requestedFPS: Int) {
         self.requestedBitrate = requestedBitrate
         self.requestedFPS = requestedFPS
+    }
+}
+
+// MARK: - Display Management
+
+/// Info about a single display.
+public struct DisplayInfo: Codable, Sendable, Identifiable {
+    public let id: Int
+    public let name: String
+    public let width: Int
+    public let height: Int
+    public let isMain: Bool
+
+    public init(id: Int, name: String, width: Int, height: Int, isMain: Bool) {
+        self.id = id
+        self.name = name
+        self.width = width
+        self.height = height
+        self.isMain = isMain
+    }
+}
+
+/// Server → Client: list of available displays.
+public struct DisplayListPayload: Codable, Sendable {
+    public let displays: [DisplayInfo]
+    public let currentIndex: Int
+
+    public init(displays: [DisplayInfo], currentIndex: Int) {
+        self.displays = displays
+        self.currentIndex = currentIndex
+    }
+}
+
+/// Client → Server: select which display to capture.
+public struct DisplaySelectPayload: Codable, Sendable {
+    public let displayIndex: Int
+
+    public init(displayIndex: Int) {
+        self.displayIndex = displayIndex
     }
 }

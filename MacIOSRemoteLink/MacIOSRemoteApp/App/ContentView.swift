@@ -42,6 +42,8 @@ struct ContentView: View {
                         navigationPath.append(Route.wanPassword(host: host, port: port))
                     }
                 }
+                
+                Spacer(minLength: 0)
             }
             .navigationTitle("MyRemote")
             .navigationDestination(for: Route.self) { route in

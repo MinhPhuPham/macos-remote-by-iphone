@@ -92,13 +92,32 @@ final class GestureHandler: NSObject, UIGestureRecognizerDelegate {
 
     private func applyZoom() {
         guard let view = targetView else { return }
+        clampPanOffset(viewSize: view.bounds.size)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        // Scale from the center of the view, then translate for pan.
         var t = CATransform3DIdentity
         t = CATransform3DTranslate(t, panOffset.x, panOffset.y, 0)
         t = CATransform3DScale(t, zoomScale, zoomScale, 1)
         view.displayLayer.transform = t
+        CATransaction.commit()
+    }
+
+    /// Constrain pan so content can't be dragged completely off-screen.
+    /// At 2× zoom, the content is 2× the view size. Panning should not
+    /// reveal more than 50% empty space on any edge.
+    private func clampPanOffset(viewSize: CGSize) {
+        let maxX = viewSize.width * (zoomScale - 1) / 2
+        let maxY = viewSize.height * (zoomScale - 1) / 2
+        panOffset.x = max(-maxX, min(maxX, panOffset.x))
+        panOffset.y = max(-maxY, min(maxY, panOffset.y))
+    }
+
+    func resetZoom() {
+        zoomScale = 1.0
+        panOffset = .zero
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        targetView?.displayLayer.transform = CATransform3DIdentity
         CATransaction.commit()
     }
 

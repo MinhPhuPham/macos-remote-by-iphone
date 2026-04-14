@@ -57,13 +57,12 @@ final class ServerManager: ObservableObject {
 
     private var captureManager: ScreenCaptureManager?
     private var videoEncoder: VideoEncoder?
+    private(set) var currentDisplayIndex: Int = 0
 
-    /// Holds the client while waiting for auth. Without this, the ServerConnection
-    /// created in handleIncomingConnection would be deallocated immediately
-    /// (local variable, only weak refs in closures).
+    /// Holds the client while waiting for auth.
     private var pendingClient: ServerConnection?
 
-    /// Track whether we've logged the first successful input validation (avoid spamming).
+    /// Track whether we've logged the first successful input validation.
     private var hasLoggedFirstInput = false
 
     // MARK: - Init
@@ -230,6 +229,8 @@ final class ServerManager: ObservableObject {
             client.send(frame: ProtocolFrame(type: .pong, payload: frame.payload))
         case .qualityUpdate:
             handleQualityUpdate(frame)
+        case .displaySelect:
+            handleDisplaySelect(frame, from: client)
         case .disconnect:
             DispatchQueue.main.async { [weak self] in self?.handleClientDisconnected() }
         default:
@@ -262,10 +263,20 @@ final class ServerManager: ObservableObject {
 
     private func handleMouseEvent(_ frame: ProtocolFrame) {
         guard let event = try? MessageCodec.decodePayload(MouseEvent.self, from: frame) else { return }
-        // Validate coordinates.
         guard event.x.isFinite, event.y.isFinite, event.x >= 0, event.y >= 0 else { return }
-        Log.input.debug("Mouse \(event.type.rawValue) at (\(event.x), \(event.y))")
-        mouseInjector.inject(event: event)
+
+        // Offset coordinates by the captured display's origin in global space.
+        // Without this, mouse events always land on the main display.
+        let originX = captureManager?.displayOriginX ?? 0
+        let originY = captureManager?.displayOriginY ?? 0
+        let globalEvent = MouseEvent(
+            sessionToken: event.sessionToken,
+            type: event.type,
+            x: event.x + Double(originX),
+            y: event.y + Double(originY)
+        )
+        Log.input.debug("Mouse \(event.type.rawValue) at (\(globalEvent.x), \(globalEvent.y))")
+        mouseInjector.inject(event: globalEvent)
     }
 
     private func handleKeyEvent(_ frame: ProtocolFrame) {
@@ -387,11 +398,45 @@ final class ServerManager: ObservableObject {
         let result = AuthResult(success: true, sessionToken: token)
         client.sendJSON(.authResult, payload: result)
 
-        pendingClient = nil  // Ownership moves to connectedClient.
+        pendingClient = nil
         connectedClient = client
         statusMessage = "Connected to \(deviceName)"
-        Log.app.info("Access granted to \"\(deviceName)\" — starting video pipeline")
+        Log.app.info("Access granted to \"\(deviceName)\"")
+
+        // Send available displays to client, then start pipeline on the main display.
+        sendDisplayList(to: client)
         startVideoPipeline(for: client)
+    }
+
+    /// Send the list of available displays to the client.
+    private func sendDisplayList(to client: ServerConnection) {
+        Task {
+            do {
+                let displays = try await ScreenCaptureManager.listDisplays()
+                let payload = DisplayListPayload(displays: displays, currentIndex: currentDisplayIndex)
+                client.sendJSON(.displayList, payload: payload)
+                Log.app.info("Sent \(displays.count) display(s) to client")
+            } catch {
+                Log.app.warning("Failed to list displays: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Handle client request to switch display.
+    private func handleDisplaySelect(_ frame: ProtocolFrame, from client: ServerConnection) {
+        guard let payload = try? MessageCodec.decodePayload(DisplaySelectPayload.self, from: frame) else { return }
+        let newIndex = payload.displayIndex
+
+        Log.app.info("Client requested display switch: \(self.currentDisplayIndex) → \(newIndex)")
+        currentDisplayIndex = newIndex
+
+        // Restart pipeline on the new display and send updated display list.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let client = self.connectedClient else { return }
+            self.stopVideoPipeline()
+            self.startVideoPipeline(for: client)
+            self.sendDisplayList(to: client)
+        }
     }
 
     private func handleClientDisconnected() {
@@ -410,61 +455,77 @@ final class ServerManager: ObservableObject {
         let capture = ScreenCaptureManager()
         self.captureManager = capture
 
-        Task {
+        Task { @MainActor in
             do {
-                // 0.75× balances quality vs latency on LAN.
-                // Full 1.0× creates frames too large for low-latency streaming.
                 let scale = MyRemoteConstants.LAN.defaultScaleFactor
-                try await capture.startCapture(scaleFactor: CGFloat(scale))
-                Log.capture.info("Capture started: \(capture.displayWidth)x\(capture.displayHeight) at \(scale)x")
-
-                let scaledWidth = Int(Double(capture.displayWidth) * scale)
-                let scaledHeight = Int(Double(capture.displayHeight) * scale)
-                let encoder = VideoEncoder(width: scaledWidth, height: scaledHeight)
-                Log.encoder.info("Encoder created: \(scaledWidth)x\(scaledHeight)")
-
-                // Wire: encoder SPS/PPS config → client
-                encoder.onVideoConfig = { [weak client] sps, pps in
-                    var configData = Data()
-                    var spsLength = UInt32(sps.count).bigEndian
-                    configData.append(Data(bytes: &spsLength, count: 4))
-                    configData.append(sps)
-                    configData.append(pps)
-                    client?.send(type: .videoConfig, payload: configData)
-                    Log.encoder.info("Sent video config: SPS=\(sps.count)B PPS=\(pps.count)B")
-                }
-
-                // Wire: encoded frames → client
-                encoder.onEncodedFrame = { [weak client] data, isKeyframe in
-                    client?.send(type: .videoFrame, payload: data)
-                }
-
-                Log.capture.info("Wiring capture → encoder → client")
-
-                // Wire: captured pixels → encoder
-                capture.onPixelBuffer = { [weak encoder] pixelBuffer, timestamp in
-                    encoder?.encode(pixelBuffer: pixelBuffer, presentationTime: timestamp)
-                }
-
-                let bitrate = streamQuality.bitrate(for: .lan)
+                let bitrate = self.streamQuality.bitrate(for: .lan)
                 let fps = MyRemoteConstants.LAN.defaultFrameRate
-                try encoder.start(bitrate: bitrate, frameRate: fps)
 
-                await MainActor.run {
-                    self.videoEncoder = encoder
+                // Step 1: Start capture to learn display dimensions.
+                try await capture.startCapture(displayIndex: self.currentDisplayIndex, scaleFactor: CGFloat(scale))
+                let displayW = capture.displayWidth
+                let displayH = capture.displayHeight
+                // H.264 requires even dimensions. Round down to nearest even number.
+                let scaledWidth = Int(Double(displayW) * scale) & ~1
+                let scaledHeight = Int(Double(displayH) * scale) & ~1
+                Log.capture.info("Capture started: \(displayW)x\(displayH) → \(scaledWidth)x\(scaledHeight)")
+
+                // Step 2: Create and start encoder.
+                let encoder = VideoEncoder(width: scaledWidth, height: scaledHeight)
+                try encoder.start(bitrate: bitrate, frameRate: fps)
+                self.videoEncoder = encoder
+                Log.encoder.info("Encoder ready: \(scaledWidth)x\(scaledHeight) \(bitrate/1000)kbps")
+
+                // Step 3: Wire encoder output → network.
+                encoder.onVideoConfig = { sps, pps in
+                    var data = Data()
+                    var len = UInt32(sps.count).bigEndian
+                    data.append(Data(bytes: &len, count: 4))
+                    data.append(sps)
+                    data.append(pps)
+                    client.send(type: .videoConfig, payload: data)
+                    Log.encoder.info("Sent config: SPS=\(sps.count)B PPS=\(pps.count)B")
                 }
 
-                // Send screen dimensions to client for coordinate mapping.
-                let config = ConfigUpdate(
-                    screenWidth: capture.displayWidth,
-                    screenHeight: capture.displayHeight,
-                    fps: fps
-                )
-                client.sendJSON(.configUpdate, payload: config)
+                encoder.onEncodedFrame = { data, isKeyframe in
+                    client.send(type: .videoFrame, payload: data)
+                }
 
-                Log.capture.info("Video pipeline started: \(scaledWidth)x\(scaledHeight) @ \(fps)fps, \(bitrate/1000)kbps")
+                // Step 4: Wire capture → encoder.
+                // Uses a strong local ref — encoder lives as long as self.videoEncoder.
+                let enc = encoder
+                var receivedFirstFrame = false
+                capture.onPixelBuffer = { pixelBuffer, timestamp in
+                    if !receivedFirstFrame {
+                        receivedFirstFrame = true
+                        Log.capture.info("First pixel buffer → encoding")
+                    }
+                    enc.encode(pixelBuffer: pixelBuffer, presentationTime: timestamp)
+                }
+                Log.capture.info("Pipeline wired: capture → encoder → client")
+
+                // Step 5: Send screen config to client.
+                client.sendJSON(.configUpdate, payload: ConfigUpdate(
+                    screenWidth: displayW, screenHeight: displayH, fps: fps
+                ))
+
+                // Step 6: Watchdog — detect if capture is delivering zero frames.
+                // This happens when Screen Recording permission was granted but
+                // the app wasn't restarted. SCStream silently delivers nothing.
+                Task {
+                    try? await Task.sleep(for: .seconds(3))
+                    if !receivedFirstFrame {
+                        Log.capture.error("⚠️ No frames received after 3s — Screen Recording may require app restart")
+                        await MainActor.run {
+                            self.statusMessage = "⚠️ Restart app to activate Screen Recording"
+                        }
+                    }
+                }
+
+                Log.capture.info("Video pipeline started")
             } catch {
                 Log.capture.error("Failed to start video pipeline: \(error.localizedDescription)")
+                self.statusMessage = "Video pipeline failed: \(error.localizedDescription)"
             }
         }
     }

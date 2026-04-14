@@ -11,14 +11,12 @@ final class SessionPipeline: ObservableObject {
     let videoDecoder = VideoDecoder()
     let gestureHandler = GestureHandler()
     let sampleBufferFactory = SampleBufferFactory()
-    /// Monotonically increasing PTS — each frame needs a unique timestamp.
-    var nextPTS: Int64 = 0
 
     @Published private(set) var fps: Int = 0
     private let _frameCount = OSAllocatedUnfairLock(initialState: 0)
     private var fpsTimer: Timer?
+    var nextPTS: Int64 = 0
 
-    /// Start a 1-second timer to update FPS. Avoids updating @Published on every frame.
     func startFPSCounter() {
         fpsTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self else { return }
@@ -29,7 +27,6 @@ final class SessionPipeline: ObservableObject {
         }
     }
 
-    /// Thread-safe — called from network/decode thread.
     func incrementFrameCount() {
         _frameCount.withLock { $0 += 1 }
     }
@@ -42,6 +39,7 @@ final class SessionPipeline: ObservableObject {
         displayView = nil
         _frameCount.withLock { $0 = 0 }
         fps = 0
+        nextPTS = 0
     }
 }
 
@@ -51,53 +49,49 @@ struct RemoteSessionView: View {
 
     @ObservedObject var connection: ClientConnection
     @StateObject private var pipeline = SessionPipeline()
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var activeModifiers = ModifierKeys()
     @State private var isKeyboardActive = false
     @State private var showControls = true
-    @State private var keyboardHeight: CGFloat = 0
+    @State private var isPipelineWired = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
+            // Video fills entire screen.
             Color.black.ignoresSafeArea()
 
             VideoDisplayView { view in
-                Log.session.info("onViewReady — view size: \(Int(view.bounds.width))x\(Int(view.bounds.height))")
+                Log.session.info("onViewReady — \(Int(view.bounds.width))x\(Int(view.bounds.height))")
                 pipeline.displayView = view
                 pipeline.gestureHandler.attach(to: view)
                 wireGestures()
                 wireVideoPipeline()
                 pipeline.startFPSCounter()
                 connection.requestKeyframe()
+                isPipelineWired = true
             }
             .ignoresSafeArea()
 
+            // Toolbar overlay — positioned at top and bottom.
+            // Does NOT ignore keyboard safe area → SwiftUI pushes it above keyboard.
             VStack(spacing: 0) {
                 if showControls { topBar }
                 Spacer()
                 if showControls { bottomBar }
             }
-            .padding(.bottom, keyboardHeight)
         }
-        .ignoresSafeArea(.container)
+        .ignoresSafeArea(.container)  // Ignore container edges but NOT keyboard.
         .onDisappear { cleanup() }
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
-        .onReceive(keyboardPublisher) { height in
-            withAnimation(.easeOut(duration: 0.25)) { keyboardHeight = height }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active && isPipelineWired {
+                Log.session.info("Foregrounded — requesting keyframe")
+                connection.requestKeyframe()
+                pipeline.displayView?.flush()
+            }
         }
-    }
-
-    // MARK: - Keyboard Publisher
-
-    private var keyboardPublisher: AnyPublisher<CGFloat, Never> {
-        let show = NotificationCenter.default
-            .publisher(for: UIResponder.keyboardWillShowNotification)
-            .map { ($0.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.height ?? 0 }
-        let hide = NotificationCenter.default
-            .publisher(for: UIResponder.keyboardWillHideNotification)
-            .map { _ -> CGFloat in 0 }
-        return Publishers.Merge(show, hide).eraseToAnyPublisher()
     }
 
     // MARK: - Top Bar
@@ -118,8 +112,7 @@ struct RemoteSessionView: View {
                 }
             } label: {
                 Image(systemName: "eye.slash")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(.caption).foregroundStyle(.white.opacity(0.7))
             }
             .buttonStyle(.plain)
         }
@@ -132,6 +125,7 @@ struct RemoteSessionView: View {
 
     private var bottomBar: some View {
         VStack(spacing: 0) {
+            // Hidden text field that captures keyboard input.
             if isKeyboardActive {
                 VirtualKeyboardView(isActive: $isKeyboardActive) { char, keyCode, _ in
                     sendKeyEvent(keyCode: keyCode, character: char)
@@ -148,13 +142,35 @@ struct RemoteSessionView: View {
 
                 Divider().frame(height: 20)
 
+                // Keyboard toggle
                 Button { isKeyboardActive.toggle() } label: {
                     Image(systemName: isKeyboardActive ? "keyboard.fill" : "keyboard")
                         .font(.title3).foregroundStyle(.white)
                 }
 
+                // Display picker (only if multiple displays)
+                if connection.availableDisplays.count > 1 {
+                    Menu {
+                        ForEach(connection.availableDisplays) { display in
+                            Button {
+                                switchDisplay(to: display.id)
+                            } label: {
+                                Label(
+                                    "\(display.name) (\(display.width)×\(display.height))",
+                                    systemImage: display.id == connection.currentDisplayIndex
+                                        ? "checkmark.circle.fill" : "display"
+                                )
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "rectangle.on.rectangle")
+                            .font(.title3).foregroundStyle(.white)
+                    }
+                }
+
                 Spacer()
 
+                // Disconnect
                 Button { connection.disconnect() } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title3).foregroundStyle(.red)
@@ -182,41 +198,37 @@ struct RemoteSessionView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Display Switch
+
+    private func switchDisplay(to index: Int) {
+        guard index != connection.currentDisplayIndex else { return }
+        Log.session.info("Switching to display \(index)")
+        pipeline.displayView?.flush()
+        pipeline.videoDecoder.invalidate()
+        pipeline.gestureHandler.resetZoom()
+        pipeline.nextPTS = 0
+        connection.selectDisplay(index: index)
+    }
+
     // MARK: - Video Pipeline
 
     private func wireVideoPipeline() {
         Log.session.info("Video pipeline wired")
 
-        // Decoded frame → display layer.
-        // Synchronous decode: fires on the network thread inside decode().
         pipeline.videoDecoder.onDecodedFrame = { [weak pipeline] pixelBuffer, _ in
-            guard let pipeline = pipeline else {
-                Log.video.warning("onDecodedFrame: pipeline is nil")
-                return
-            }
-            // Each frame MUST have a unique increasing PTS or the layer may skip it.
+            guard let pipeline = pipeline else { return }
             pipeline.nextPTS += 1
             let pts = CMTime(value: pipeline.nextPTS, timescale: 30)
             guard let sampleBuffer = pipeline.sampleBufferFactory.create(
                 from: pixelBuffer, presentationTime: pts
-            ) else {
-                Log.video.warning("Failed to create sample buffer from pixel buffer")
-                return
-            }
-            guard let displayView = pipeline.displayView else {
-                Log.video.warning("displayView is nil — frame dropped")
-                return
-            }
+            ) else { return }
+            guard let displayView = pipeline.displayView else { return }
             displayView.enqueue(sampleBuffer)
             pipeline.incrementFrameCount()
         }
 
-        // Network frames → decoder.
         connection.onFrameReceived = { [weak pipeline] frame in
-            guard let pipeline = pipeline else {
-                Log.session.warning("onFrameReceived: pipeline is nil")
-                return
-            }
+            guard let pipeline = pipeline else { return }
             switch frame.type {
             case .videoConfig:
                 Log.session.info("videoConfig received (\(frame.payload.count)B)")
@@ -227,7 +239,6 @@ struct RemoteSessionView: View {
                 Log.session.info("configUpdate received")
                 Self.handleConfigUpdate(frame, pipeline: pipeline)
             default:
-                Log.session.debug("Unhandled frame type in session: \(frame.type.rawValue)")
                 break
             }
         }
@@ -235,21 +246,13 @@ struct RemoteSessionView: View {
 
     private static func handleVideoConfig(_ frame: ProtocolFrame, pipeline: SessionPipeline) {
         let data = frame.payload
-        guard data.count > 4 else {
-            Log.session.error("videoConfig too short: \(data.count)B")
-            return
-        }
+        guard data.count > 4 else { return }
         let spsLength = Int(data[0..<4].withUnsafeBytes {
             $0.loadUnaligned(as: UInt32.self).bigEndian
         })
-        guard data.count >= 4 + spsLength else {
-            Log.session.error("videoConfig truncated: need \(4+spsLength)B, got \(data.count)B")
-            return
-        }
-
+        guard data.count >= 4 + spsLength else { return }
         let sps = data.subdata(in: 4..<(4 + spsLength))
         let pps = data.subdata(in: (4 + spsLength)..<data.count)
-
         do {
             try pipeline.videoDecoder.configure(sps: sps, pps: pps)
             Log.session.info("Decoder configured: SPS=\(sps.count)B PPS=\(pps.count)B")
@@ -259,14 +262,12 @@ struct RemoteSessionView: View {
     }
 
     private static func handleConfigUpdate(_ frame: ProtocolFrame, pipeline: SessionPipeline) {
-        guard let config = try? MessageCodec.decodePayload(ConfigUpdate.self, from: frame) else {
-            Log.session.error("Failed to decode configUpdate")
-            return
-        }
+        guard let config = try? MessageCodec.decodePayload(ConfigUpdate.self, from: frame) else { return }
         Log.session.info("Screen: \(config.screenWidth)x\(config.screenHeight) @\(config.fps)fps")
         DispatchQueue.main.async { [weak pipeline] in
             pipeline?.gestureHandler.serverScreenWidth = CGFloat(config.screenWidth)
             pipeline?.gestureHandler.serverScreenHeight = CGFloat(config.screenHeight)
+            pipeline?.gestureHandler.resetZoom()
         }
     }
 
@@ -307,6 +308,7 @@ struct RemoteSessionView: View {
 
     private func cleanup() {
         Log.session.info("Session cleanup")
+        isPipelineWired = false
         pipeline.reset()
         connection.onFrameReceived = nil
     }
