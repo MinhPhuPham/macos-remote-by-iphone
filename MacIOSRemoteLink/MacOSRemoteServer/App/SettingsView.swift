@@ -1,6 +1,118 @@
 import SwiftUI
 
-/// macOS Settings window: password management, trusted devices, stream quality, preferences.
+// MARK: - Reusable Permission Banner
+
+/// A warning banner that shows when required permissions are not granted.
+/// Reusable across Settings, Onboarding, or any view that needs it.
+struct PermissionBanner: View {
+
+    let hasScreenRecording: Bool
+    let hasAccessibility: Bool
+    let onRequestScreenRecording: () -> Void
+    let onRequestAccessibility: () -> Void
+
+    var allGranted: Bool { hasScreenRecording && hasAccessibility }
+
+    var body: some View {
+        if !allGranted {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Permissions Required", systemImage: "exclamationmark.triangle.fill")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.orange)
+
+                if !hasScreenRecording {
+                    permissionItem(
+                        title: "Screen Recording",
+                        description: "Required to capture and stream your screen",
+                        action: onRequestScreenRecording
+                    )
+                }
+
+                if !hasAccessibility {
+                    permissionItem(
+                        title: "Accessibility",
+                        description: "Required to control mouse and keyboard",
+                        action: onRequestAccessibility
+                    )
+                }
+
+                Text("Grant permissions in System Settings → Privacy & Security")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        }
+    }
+
+    private func permissionItem(title: String, description: String, action: @escaping () -> Void) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.callout.bold())
+                Text(description).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Grant") { action() }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+    }
+}
+
+// MARK: - Approval Banner (reusable)
+
+/// Shows a pending connection request. Reusable in MenuBarView and SettingsView.
+struct ApprovalBanner: View {
+
+    let pending: ServerManager.PendingApproval
+    let onApproveOnce: () -> Void
+    let onApproveAlways: () -> Void
+    let onDeny: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Connection Request", systemImage: "person.badge.shield.checkmark")
+                .font(.subheadline.bold())
+                .foregroundStyle(.blue)
+
+            HStack(spacing: 8) {
+                Image(systemName: "iphone")
+                    .font(.title2)
+                    .foregroundStyle(.blue)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pending.deviceName).font(.headline)
+                    Text(pending.clientIP).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+
+            Text("This device will see your screen and control mouse & keyboard.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                Button("Allow Once", action: onApproveOnce)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+
+                Button("Always Allow", action: onApproveAlways)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                Spacer()
+
+                Button("Deny", role: .destructive, action: onDeny)
+                    .controlSize(.small)
+            }
+        }
+        .padding(12)
+        .background(Color.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+// MARK: - Settings View
+
+/// macOS Settings window: password management, trusted devices, stream quality, permissions.
 struct SettingsView: View {
 
     @ObservedObject var server: ServerManager
@@ -10,26 +122,65 @@ struct SettingsView: View {
     @State private var currentPIN: String = ""
     @State private var selectedTab = "general"
     @State private var errorMessage: String?
+    @State private var hasScreenRecording = ScreenCaptureManager.hasPermission()
+    @State private var hasAccessibility = MouseInjector.hasAccessibilityPermission()
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            generalTab
-                .tabItem { Label("General", systemImage: "gear") }
-                .tag("general")
+        VStack(spacing: 0) {
+            // Permission banner at top — always visible when permissions missing.
+            PermissionBanner(
+                hasScreenRecording: hasScreenRecording,
+                hasAccessibility: hasAccessibility,
+                onRequestScreenRecording: {
+                    ScreenCaptureManager.requestPermission()
+                    refreshPermissions()
+                },
+                onRequestAccessibility: {
+                    MouseInjector.requestAccessibilityPermission()
+                    refreshPermissions()
+                }
+            )
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
 
-            securityTab
-                .tabItem { Label("Security", systemImage: "lock.shield") }
-                .tag("security")
+            // Approval banner — visible when a device is waiting.
+            if let pending = server.pendingApproval {
+                ApprovalBanner(
+                    pending: pending,
+                    onApproveOnce: { server.approveConnection(trustPermanently: false) },
+                    onApproveAlways: { server.approveConnection(trustPermanently: true) },
+                    onDeny: { server.denyConnection() }
+                )
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+            }
 
-            devicesTab
-                .tabItem { Label("Devices", systemImage: "iphone") }
-                .tag("devices")
+            TabView(selection: $selectedTab) {
+                generalTab
+                    .tabItem { Label("General", systemImage: "gear") }
+                    .tag("general")
+
+                securityTab
+                    .tabItem { Label("Security", systemImage: "lock.shield") }
+                    .tag("security")
+
+                devicesTab
+                    .tabItem { Label("Devices", systemImage: "iphone") }
+                    .tag("devices")
+            }
         }
-        .frame(width: 480, height: 360)
+        .frame(width: 500, height: 440)
         .onAppear {
-            // LSUIElement apps don't auto-activate — bring Settings window to front.
-            NSApplication.shared.activate()
             currentPIN = server.authManager.currentPassword() ?? ""
+            refreshPermissions()
+        }
+    }
+
+    private func refreshPermissions() {
+        // Delay slightly for system to update after granting.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            hasScreenRecording = ScreenCaptureManager.hasPermission()
+            hasAccessibility = MouseInjector.hasAccessibilityPermission()
         }
     }
 
@@ -54,43 +205,65 @@ struct SettingsView: View {
                         Circle()
                             .fill(server.isRunning ? Color.green : Color.gray)
                             .frame(width: 8, height: 8)
-                            .accessibilityHidden(true)
                         Text(server.isRunning ? "Running" : "Stopped")
                     }
                 }
-                .accessibilityLabel("Server status: \(server.isRunning ? "running" : "stopped")")
             }
 
             Section("Permissions") {
-                HStack {
-                    Text("Screen Recording")
-                    Spacer()
-                    if ScreenCaptureManager.hasPermission() {
-                        Label("Granted", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    } else {
-                        Button("Request") {
-                            ScreenCaptureManager.requestPermission()
-                        }
-                    }
+                permissionRow(
+                    title: "Screen Recording",
+                    description: "Capture and stream your screen",
+                    isGranted: hasScreenRecording
+                ) {
+                    ScreenCaptureManager.requestPermission()
+                    refreshPermissions()
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Screen Recording permission: \(ScreenCaptureManager.hasPermission() ? "granted" : "not granted")")
 
-                HStack {
-                    Text("Accessibility")
-                    Spacer()
-                    if MouseInjector.hasAccessibilityPermission() {
-                        Label("Granted", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    } else {
-                        Button("Request") {
-                            MouseInjector.requestAccessibilityPermission()
-                        }
-                    }
+                permissionRow(
+                    title: "Accessibility",
+                    description: "Control mouse and keyboard",
+                    isGranted: hasAccessibility
+                ) {
+                    MouseInjector.requestAccessibilityPermission()
+                    refreshPermissions()
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Accessibility permission: \(MouseInjector.hasAccessibilityPermission() ? "granted" : "not granted")")
+
+                Button("Open System Settings") {
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy")!)
+                }
+                .font(.caption)
+            }
+
+            Section("Network") {
+                LabeledContent("Local IP") {
+                    Text("\(server.localIP):\(MyRemoteConstants.defaultPort)")
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+
+                LabeledContent("Public IP") {
+                    Text("\(server.publicIP):\(MyRemoteConstants.defaultPort)")
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+
+                DisclosureGroup("Remote Access Setup Guide") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        guideStep(1, "Open your router admin page (usually 192.168.1.1)")
+                        guideStep(2, "Find 'Port Forwarding' or 'Virtual Server' or 'NAT'")
+                        guideStep(3, "Add rule: External port 5910 → \(server.localIP):5910 TCP")
+                        guideStep(4, "On iPhone, enter your Public IP: \(server.publicIP)")
+                        guideStep(5, "Make sure macOS Firewall allows incoming connections")
+
+                        Divider()
+
+                        Text("If you don't have router admin access, you'll need a VPN (e.g. Tailscale) or a relay server to connect remotely.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
             }
         }
         .formStyle(.grouped)
@@ -157,19 +330,33 @@ struct SettingsView: View {
 
     // MARK: - Devices Tab
 
+    @State private var deviceToRevoke: TrustedDevice?
+
     private var devicesTab: some View {
         Form {
             Section("Trusted Devices") {
                 if server.trustedDeviceStore.devices.isEmpty {
-                    Text("No trusted devices")
-                        .foregroundStyle(.secondary)
+                    VStack(spacing: 8) {
+                        Image(systemName: "iphone.slash")
+                            .font(.title)
+                            .foregroundStyle(.secondary)
+                        Text("No trusted devices")
+                            .foregroundStyle(.secondary)
+                        Text("Devices approved with \"Always Allow\" appear here.")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
                 } else {
                     ForEach(server.trustedDeviceStore.devices) { device in
                         HStack {
+                            Image(systemName: "iphone")
+                                .foregroundStyle(.blue)
                             VStack(alignment: .leading) {
                                 Text(device.name)
                                     .font(.headline)
-                                Text("Added \(device.dateAdded.formatted(date: .abbreviated, time: .omitted))")
+                                Text("Trusted since \(device.dateAdded.formatted(date: .abbreviated, time: .omitted))")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -177,20 +364,81 @@ struct SettingsView: View {
                             Spacer()
 
                             Button("Revoke", role: .destructive) {
-                                server.trustedDeviceStore.revoke(deviceUUID: device.id)
+                                deviceToRevoke = device
                             }
                             .buttonStyle(.bordered)
+                            .controlSize(.small)
                         }
                     }
                 }
 
                 if !server.trustedDeviceStore.devices.isEmpty {
-                    Button("Revoke All", role: .destructive) {
+                    Button("Revoke All Devices", role: .destructive) {
                         server.trustedDeviceStore.revokeAll()
                     }
                 }
             }
         }
         .formStyle(.grouped)
+        .confirmationDialog(
+            "Revoke \"\(deviceToRevoke?.name ?? "")\"?",
+            isPresented: Binding(
+                get: { deviceToRevoke != nil },
+                set: { if !$0 { deviceToRevoke = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Revoke", role: .destructive) {
+                if let device = deviceToRevoke {
+                    server.trustedDeviceStore.revoke(deviceUUID: device.id)
+                }
+                deviceToRevoke = nil
+            }
+            Button("Cancel", role: .cancel) {
+                deviceToRevoke = nil
+            }
+        } message: {
+            Text("This device will need to be approved again on next connection.")
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func permissionRow(
+        title: String,
+        description: String,
+        isGranted: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if isGranted {
+                Label("Granted", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.callout)
+            } else {
+                Button("Grant") { action() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+        }
+    }
+
+    private func guideStep(_ number: Int, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("\(number)")
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(.blue))
+            Text(text)
+                .font(.callout)
+        }
     }
 }

@@ -5,6 +5,7 @@ import SwiftUI
 struct OnboardingView: View {
 
     @ObservedObject var server: ServerManager
+    var onComplete: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
 
     @State private var hasScreenRecording = ScreenCaptureManager.hasPermission()
@@ -32,7 +33,6 @@ struct OnboardingView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial)
         .onAppear {
-            NSApplication.shared.activate()
             refreshPermissions()
         }
     }
@@ -151,6 +151,7 @@ struct OnboardingView: View {
                 if !server.isRunning {
                     server.start()
                 }
+                onComplete?()
                 dismiss()
             }
             .buttonStyle(.borderedProminent)

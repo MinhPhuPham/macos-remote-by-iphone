@@ -5,6 +5,7 @@ struct MenuBarView: View {
 
     @ObservedObject var server: ServerManager
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -29,49 +30,12 @@ struct MenuBarView: View {
     // MARK: - Approval Request
 
     private func approvalSection(_ pending: ServerManager.PendingApproval) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Connection Request", systemImage: "person.badge.shield.checkmark")
-                .font(.subheadline.bold())
-                .foregroundStyle(.orange)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(pending.deviceName)
-                    .font(.headline)
-                Text(pending.clientIP)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Text("This device will see your screen and control mouse & keyboard.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 8) {
-                Button("Allow Once") {
-                    server.approveConnection(trustPermanently: false)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
-                .controlSize(.small)
-
-                Button("Always Allow") {
-                    server.approveConnection(trustPermanently: true)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-                Spacer()
-
-                Button("Deny") {
-                    server.denyConnection()
-                }
-                .foregroundStyle(.red)
-                .controlSize(.small)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        ApprovalBanner(
+            pending: pending,
+            onApproveOnce: { server.approveConnection(trustPermanently: false) },
+            onApproveAlways: { server.approveConnection(trustPermanently: true) },
+            onDeny: { server.denyConnection() }
+        )
         .padding(.horizontal, 8)
     }
 
@@ -95,16 +59,18 @@ struct MenuBarView: View {
 
             if server.isRunning && server.connectedClient == nil {
                 Divider().padding(.vertical, 2)
-                HStack(spacing: 6) {
-                    Image(systemName: "network")
-                        .foregroundStyle(.blue)
-                    Text("Port:")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("\(MyRemoteConstants.defaultPort)")
-                        .font(.system(.body, design: .monospaced).bold())
-                        .textSelection(.enabled)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    ipRow(label: "Local", value: "\(server.localIP):\(MyRemoteConstants.defaultPort)",
+                          icon: "wifi", color: .blue)
+                    ipRow(label: "Public", value: "\(server.publicIP):\(MyRemoteConstants.defaultPort)",
+                          icon: "globe", color: .orange)
                 }
+
+                Text("Remote access requires port forwarding on your router.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 2)
             }
         }
         .padding(.horizontal, 14)
@@ -133,18 +99,34 @@ struct MenuBarView: View {
 
             Divider().padding(.vertical, 2)
 
-            menuButton("Setup Guide...", icon: "questionmark.circle") {
-                openWindow(id: "onboarding")
+            // Only show Setup Guide if permissions are missing.
+            if !ScreenCaptureManager.hasPermission() || !MouseInjector.hasAccessibilityPermission() {
+                menuButton("Setup Guide...", icon: "questionmark.circle") {
+                    NSApp.setActivationPolicy(.regular)
+                    openWindow(id: "onboarding")
+                    DispatchQueue.main.async {
+                        NSApp.activate()
+                        for window in NSApp.windows where window.isVisible && !window.title.isEmpty {
+                            window.makeKeyAndOrderFront(nil)
+                            window.orderFrontRegardless()
+                        }
+                    }
+                }
             }
 
-            SettingsLink {
-                Label("Settings...", systemImage: "gear")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
+            menuButton("Settings...", icon: "gear") {
+                // openSettings() opens or brings the Settings window to front.
+                // But for LSUIElement apps it stays behind — force it.
+                NSApp.setActivationPolicy(.regular)
+                openSettings()
+                DispatchQueue.main.async {
+                    NSApp.activate()
+                    for window in NSApp.windows where window.isVisible && !window.title.isEmpty {
+                        window.makeKeyAndOrderFront(nil)
+                        window.orderFrontRegardless()
+                    }
+                }
             }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 4)
             .keyboardShortcut(",")
         }
     }
@@ -172,6 +154,21 @@ struct MenuBarView: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 14)
         .padding(.vertical, 4)
+    }
+
+    private func ipRow(label: String, value: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .foregroundStyle(color)
+                .frame(width: 14)
+            Text("\(label):")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .trailing)
+            Text(value)
+                .font(.system(.caption, design: .monospaced))
+                .textSelection(.enabled)
+        }
     }
 
     private var statusColor: Color {

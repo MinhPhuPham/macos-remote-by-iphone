@@ -14,6 +14,8 @@ final class ServerManager: ObservableObject {
     @Published private(set) var statusMessage = "Server stopped"
     @Published private(set) var connectedClient: ServerConnection?
     @Published private(set) var pendingApproval: PendingApproval?
+    @Published private(set) var localIP: String = "—"
+    @Published private(set) var publicIP: String = "—"
     @Published var streamQuality: StreamQuality = .medium
 
     /// A device waiting for user approval.
@@ -95,6 +97,54 @@ final class ServerManager: ObservableObject {
         isRunning = true
         Log.app.info("Server started on port \(MyRemoteConstants.defaultPort)")
         statusMessage = "Waiting for connections..."
+        detectNetworkAddresses()
+    }
+
+    /// Detect local WiFi IP and public IP for display in menu bar / settings.
+    private func detectNetworkAddresses() {
+        // Local IP — from network interfaces.
+        localIP = Self.getLocalIPAddress() ?? "Unknown"
+
+        // Public IP — async HTTP call.
+        publicIP = "Loading..."
+        Task {
+            let ip = await Self.fetchPublicIP()
+            await MainActor.run { self.publicIP = ip }
+        }
+    }
+
+    /// Get the local WiFi IP address (en0).
+    private static func getLocalIPAddress() -> String? {
+        var address: String?
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else { return nil }
+        defer { freeifaddrs(ifaddr) }
+
+        for ptr in sequence(first: firstAddr, next: { $0.pointee.ifa_next }) {
+            let interface = ptr.pointee
+            let addrFamily = interface.ifa_addr.pointee.sa_family
+            guard addrFamily == UInt8(AF_INET) else { continue } // IPv4 only
+            let name = String(cString: interface.ifa_name)
+            guard name == "en0" else { continue } // WiFi interface
+
+            var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            getnameinfo(interface.ifa_addr, socklen_t(interface.ifa_addr.pointee.sa_len),
+                        &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST)
+            address = String(cString: hostname)
+        }
+        return address
+    }
+
+    /// Fetch public IP from a free API.
+    private static func fetchPublicIP() async -> String {
+        guard let url = URL(string: "https://api.ipify.org") else { return "Unknown" }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Unknown"
+        } catch {
+            Log.app.warning("Failed to fetch public IP: \(error.localizedDescription)")
+            return "Unavailable"
+        }
     }
 
     func stop() {
