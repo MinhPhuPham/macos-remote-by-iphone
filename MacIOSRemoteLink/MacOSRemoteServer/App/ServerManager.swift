@@ -21,9 +21,21 @@ final class ServerManager: ObservableObject {
     /// A device waiting for user approval.
     struct PendingApproval {
         let deviceName: String
+        let deviceModel: String
         let deviceUUID: String
         let clientIP: String
         let client: ServerConnection
+    }
+
+    /// User-configurable server name shown to iOS clients via Bonjour.
+    @Published var serverName: String {
+        didSet {
+            UserDefaults.standard.set(serverName, forKey: "MyRemote.ServerName")
+            // Update Bonjour advertisement with new name.
+            if isRunning {
+                advertiser.updateServiceName(serverName)
+            }
+        }
     }
 
     enum StreamQuality: String, CaseIterable, Identifiable {
@@ -71,6 +83,8 @@ final class ServerManager: ObservableObject {
         let store = TrustedDeviceStore()
         self.trustedDeviceStore = store
         self.authManager = AuthManager(trustedDeviceStore: store)
+        self.serverName = UserDefaults.standard.string(forKey: "MyRemote.ServerName")
+            ?? ProcessInfo.processInfo.hostName.replacingOccurrences(of: ".local", with: "")
         self.advertiser = BonjourAdvertiser()
 
         advertiser.onNewConnection = { [weak self] nwConnection in
@@ -92,7 +106,7 @@ final class ServerManager: ObservableObject {
                 Log.app.error("Failed to generate PIN: \(error.localizedDescription)")
             }
         }
-        advertiser.start(tlsIdentity: nil)
+        advertiser.start(tlsIdentity: nil, serviceName: serverName)
         isRunning = true
         Log.app.info("Server started on port \(MyRemoteConstants.defaultPort)")
         statusMessage = "Waiting for connections..."
@@ -327,8 +341,12 @@ final class ServerManager: ObservableObject {
         authManager.clearFailedAttempts(ip: clientIP, deviceUUID: deviceUUID)
         client.isAuthenticated = true
 
+        let deviceModel = request.deviceModel ?? "iPhone"
+
         if authManager.deviceIsTrusted(request.deviceUUID) {
             Log.auth.info("Device trusted — granting access automatically")
+            // Update stored device info (name/model may have changed).
+            trustedDeviceStore.trust(deviceUUID: deviceUUID, deviceName: request.deviceName, deviceModel: deviceModel)
             DispatchQueue.main.async { [weak self] in
                 self?.grantAccess(to: client, deviceName: request.deviceName)
             }
@@ -339,6 +357,7 @@ final class ServerManager: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             self?.showConfirmationDialog(
                 deviceName: request.deviceName,
+                deviceModel: deviceModel,
                 deviceUUID: request.deviceUUID,
                 clientIP: clientIP,
                 client: client
@@ -348,18 +367,19 @@ final class ServerManager: ObservableObject {
 
     private func showConfirmationDialog(
         deviceName: String,
+        deviceModel: String,
         deviceUUID: String,
         clientIP: String,
         client: ServerConnection
     ) {
-        // Sanitize device name: truncate and strip control characters.
         let sanitizedName = String(
             deviceName.prefix(50).unicodeScalars.filter { !$0.properties.isDefaultIgnorableCodePoint && $0.value >= 0x20 }
         )
 
-        Log.app.info("Pending approval for \"\(sanitizedName)\" (\(clientIP))")
+        Log.app.info("Pending approval for \"\(sanitizedName)\" (\(deviceModel)) (\(clientIP))")
         pendingApproval = PendingApproval(
             deviceName: sanitizedName,
+            deviceModel: deviceModel,
             deviceUUID: deviceUUID,
             clientIP: clientIP,
             client: client
@@ -370,7 +390,9 @@ final class ServerManager: ObservableObject {
     func approveConnection(trustPermanently: Bool) {
         guard let pending = pendingApproval else { return }
         if trustPermanently {
-            trustedDeviceStore.trust(deviceUUID: pending.deviceUUID, deviceName: pending.deviceName)
+            trustedDeviceStore.trust(deviceUUID: pending.deviceUUID,
+                                     deviceName: pending.deviceName,
+                                     deviceModel: pending.deviceModel)
         }
         pendingApproval = nil
         grantAccess(to: pending.client, deviceName: pending.deviceName)

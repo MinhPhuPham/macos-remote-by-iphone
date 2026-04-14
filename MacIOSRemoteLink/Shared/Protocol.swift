@@ -80,11 +80,13 @@ public struct AuthRequest: Codable, Sendable {
     public let password: String
     public let deviceUUID: String
     public let deviceName: String
+    public let deviceModel: String?
 
-    public init(password: String, deviceUUID: String, deviceName: String) {
+    public init(password: String, deviceUUID: String, deviceName: String, deviceModel: String? = nil) {
         self.password = password
         self.deviceUUID = deviceUUID
         self.deviceName = deviceName
+        self.deviceModel = deviceModel
     }
 }
 

@@ -144,7 +144,8 @@ final class ClientConnection: ObservableObject {
         let request = AuthRequest(
             password: password,
             deviceUUID: DeviceIdentity.uuid,
-            deviceName: DeviceIdentity.deviceName
+            deviceName: DeviceIdentity.deviceName,
+            deviceModel: DeviceIdentity.deviceModel
         )
         do {
             let data = try MessageCodec.encode(.authRequest, payload: request)

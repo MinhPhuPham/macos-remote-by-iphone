@@ -4,8 +4,25 @@ import Foundation
 /// Represents a trusted iOS client device.
 struct TrustedDevice: Identifiable, Codable, Hashable {
     let id: String          // device UUID
-    let name: String        // device display name
+    let name: String        // user-set device name (e.g., "John's iPhone")
+    let model: String       // device model (e.g., "iPhone")
     let dateAdded: Date
+
+    /// For backward compatibility with stored data that may not have `model`.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        model = try container.decodeIfPresent(String.self, forKey: .model) ?? "iPhone"
+        dateAdded = try container.decode(Date.self, forKey: .dateAdded)
+    }
+
+    init(id: String, name: String, model: String, dateAdded: Date) {
+        self.id = id
+        self.name = name
+        self.model = model
+        self.dateAdded = dateAdded
+    }
 }
 
 /// Persists the list of trusted device UUIDs so they skip the confirmation dialog.
@@ -25,10 +42,15 @@ final class TrustedDeviceStore: ObservableObject {
         devices.contains { $0.id == deviceUUID }
     }
 
-    func trust(deviceUUID: String, deviceName: String) {
-        guard !isTrusted(deviceUUID) else { return }
-        let device = TrustedDevice(id: deviceUUID, name: deviceName, dateAdded: Date())
-        devices.append(device)
+    func trust(deviceUUID: String, deviceName: String, deviceModel: String = "iPhone") {
+        // Update existing device info if already trusted.
+        if let idx = devices.firstIndex(where: { $0.id == deviceUUID }) {
+            devices[idx] = TrustedDevice(id: deviceUUID, name: deviceName,
+                                         model: deviceModel, dateAdded: devices[idx].dateAdded)
+        } else {
+            devices.append(TrustedDevice(id: deviceUUID, name: deviceName,
+                                         model: deviceModel, dateAdded: Date()))
+        }
         save()
     }
 

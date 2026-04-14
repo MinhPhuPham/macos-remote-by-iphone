@@ -21,12 +21,21 @@ enum DeviceIdentity {
         return newUUID
     }
 
-    /// A human-readable device name.
+    /// A human-readable device name (user-customized name like "John's iPhone").
     static var deviceName: String {
         #if canImport(UIKit)
         return UIDevice.current.name
         #else
         return "iOS Client"
+        #endif
+    }
+
+    /// Device model (e.g., "iPhone", "iPad").
+    static var deviceModel: String {
+        #if canImport(UIKit)
+        return UIDevice.current.model
+        #else
+        return "iOS"
         #endif
     }
 

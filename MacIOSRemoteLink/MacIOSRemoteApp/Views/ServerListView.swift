@@ -14,7 +14,6 @@ struct ServerListView: View {
                 serverList
             }
         }
-        .navigationTitle("MyRemote")
         .onAppear { browser.startBrowsing() }
         .onDisappear { browser.stopBrowsing() }
     }
@@ -35,12 +34,35 @@ struct ServerListView: View {
                 .multilineTextAlignment(.center)
         }
         .padding()
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Searching for Mac. Make sure MyRemote Server is running on your Mac and both devices are on the same WiFi network.")
+    }
+
+    /// Build display names with suffix for duplicates: "My Mac", "My Mac (2)", etc.
+    private var displayNames: [String: String] {
+        var nameCounts: [String: Int] = [:]
+        var result: [String: String] = [:]
+
+        // Count occurrences of each name.
+        for server in browser.servers {
+            nameCounts[server.name, default: 0] += 1
+        }
+
+        // Assign display names with suffix for duplicates.
+        var nameIndex: [String: Int] = [:]
+        for server in browser.servers {
+            if nameCounts[server.name, default: 1] > 1 {
+                let idx = nameIndex[server.name, default: 0]
+                nameIndex[server.name] = idx + 1
+                result[server.id] = "\(server.name) (\(idx + 1))"
+            } else {
+                result[server.id] = server.name
+            }
+        }
+        return result
     }
 
     private var serverList: some View {
-        List(browser.servers) { server in
+        let names = displayNames  // Compute once, not per row.
+        return List(browser.servers) { server in
             Button {
                 onSelectServer(server)
             } label: {
@@ -50,7 +72,7 @@ struct ServerListView: View {
                         .foregroundStyle(.blue)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(server.name)
+                        Text(names[server.id] ?? server.name)
                             .font(.headline)
                         Text("Available")
                             .font(.caption)
@@ -64,8 +86,6 @@ struct ServerListView: View {
                 }
                 .padding(.vertical, 4)
             }
-            .accessibilityLabel("\(server.name), available")
-            .accessibilityHint("Double tap to connect")
         }
         .refreshable {
             browser.stopBrowsing()

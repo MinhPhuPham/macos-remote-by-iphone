@@ -81,7 +81,10 @@ struct ApprovalBanner: View {
                     .foregroundStyle(.blue)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(pending.deviceName).font(.headline)
-                    Text(pending.clientIP).font(.caption).foregroundStyle(.secondary)
+                    Text(pending.deviceModel)
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text(pending.clientIP)
+                        .font(.caption2).foregroundStyle(.tertiary)
                 }
                 Spacer()
             }
@@ -124,6 +127,8 @@ struct SettingsView: View {
     @State private var errorMessage: String?
     @State private var hasScreenRecording = ScreenCaptureManager.hasPermission()
     @State private var hasAccessibility = MouseInjector.hasAccessibilityPermission()
+    @State private var isEditingName = false
+    @State private var editingName = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -189,6 +194,33 @@ struct SettingsView: View {
     private var generalTab: some View {
         Form {
             Section("Server") {
+                if isEditingName {
+                    HStack {
+                        TextField("Server Name", text: $editingName)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { saveName() }
+
+                        Button("Save") { saveName() }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .disabled(editingName.trimmingCharacters(in: .whitespaces).isEmpty)
+
+                        Button("Cancel") { isEditingName = false }
+                            .controlSize(.small)
+                    }
+                } else {
+                    LabeledContent("Name") {
+                        HStack(spacing: 8) {
+                            Text(server.serverName)
+                            Button("Edit") {
+                                editingName = server.serverName
+                                isEditingName = true
+                            }
+                            .controlSize(.small)
+                        }
+                    }
+                }
+
                 LabeledContent("Port") {
                     Text("\(MyRemoteConstants.defaultPort)")
                         .foregroundStyle(.secondary)
@@ -350,15 +382,21 @@ struct SettingsView: View {
                     .padding(.vertical, 12)
                 } else {
                     ForEach(server.trustedDeviceStore.devices) { device in
-                        HStack {
+                        HStack(spacing: 10) {
                             Image(systemName: "iphone")
+                                .font(.title2)
                                 .foregroundStyle(.blue)
-                            VStack(alignment: .leading) {
+                                .frame(width: 28)
+
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(device.name)
                                     .font(.headline)
-                                Text("Trusted since \(device.dateAdded.formatted(date: .abbreviated, time: .omitted))")
+                                Text(device.model)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                Text("Trusted \(device.dateAdded.formatted(date: .abbreviated, time: .shortened))")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
                             }
 
                             Spacer()
@@ -400,6 +438,15 @@ struct SettingsView: View {
         } message: {
             Text("This device will need to be approved again on next connection.")
         }
+    }
+
+    // MARK: - Actions
+
+    private func saveName() {
+        let trimmed = editingName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        server.serverName = trimmed
+        isEditingName = false
     }
 
     // MARK: - Helpers

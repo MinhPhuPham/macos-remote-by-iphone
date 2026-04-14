@@ -23,7 +23,16 @@ final class BonjourAdvertiser: ObservableObject {
 
     // MARK: - Start / Stop
 
-    func start(tlsIdentity: SecIdentity?) {
+    /// Update Bonjour service name (e.g., when user renames server).
+    func updateServiceName(_ name: String) {
+        listener?.service = NWListener.Service(
+            name: name,
+            type: MyRemoteConstants.bonjourServiceType
+        )
+        Log.bonjour.info("Service name updated to: \(name)")
+    }
+
+    func start(tlsIdentity: SecIdentity?, serviceName: String = "MyRemote") {
         do {
             let parameters: NWParameters
 
@@ -65,7 +74,7 @@ final class BonjourAdvertiser: ObservableObject {
 
         // Advertise via Bonjour.
         listener?.service = NWListener.Service(
-            name: "MyRemote",
+            name: serviceName,
             type: MyRemoteConstants.bonjourServiceType
         )
 
